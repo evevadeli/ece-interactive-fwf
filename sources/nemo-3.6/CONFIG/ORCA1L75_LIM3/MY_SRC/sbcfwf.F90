@@ -46,12 +46,16 @@ MODULE sbcfwf
    !: information about the additionnal forced river runoff file to be read
    TYPE(FLD_N)       , PUBLIC                ::   sn_zshelf 
    !: information about the basal melt depth file to be read
+   TYPE(FLD_N)       , PUBLIC                ::   sn_zdraft
+   !: information about the basal melt depth file to be read
 
    TYPE(FLD), ALLOCATABLE, DIMENSION(:)      ::   sf_rnf_f
    ! structure: additional forced runoff  (file information, fields read)
    TYPE(FLD), ALLOCATABLE, DIMENSION(:)      ::   sf_cal_f
    ! structure: additional forced calving (file information, fields read)
    REAL(wp), ALLOCATABLE, SAVE, DIMENSION(:,:)   ::  sf_zshelf
+   ! structure: basal melt depth (file information, fields read)
+   REAL(wp), ALLOCATABLE, SAVE, DIMENSION(:,:)   ::  sf_zdraft
    ! structure: basal melt depth (file information, fields read)
 
 
@@ -70,7 +74,7 @@ CONTAINS
       !!----------------------------------------------------------------------
  
       integer :: inum
-      NAMELIST/namsbc_fwf/  cn_dir_f, sn_rnf_f, sn_cal_f, sn_zshelf
+      NAMELIST/namsbc_fwf/  cn_dir_f, sn_rnf_f, sn_cal_f, sn_zshelf, sn_zdraft
 
       REWIND( numnam_cfg )              ! Namelist namsbc_fwf in configuration namelist: Freshwater Forcing
       READ  ( numnam_cfg, namsbc_fwf, IOSTAT = ios, ERR = 901 )
@@ -97,22 +101,41 @@ CONTAINS
       CALL fld_fill( sf_cal_f, (/ sn_cal_f /), cn_dir_f, 'sbc_cal_init_f', 'read runoffs data', 'namsbc_fwf' )
 
       ALLOCATE( sf_zshelf(jpi,jpj))
-      !ALLOCATE( sf_zshelf(1), STAT=ierror )         ! Create sf_cal_f structure (calving inflow)
       IF(lwp) WRITE(numout,*)
-      IF(lwp) WRITE(numout,*) '          basal melt depth read in a file'
+      IF(lwp) WRITE(numout,*) '          basal melt distribution top depth read in a file'
       IF( ierror > 0 ) THEN
          CALL ctl_stop( 'sbc_zshelf: unable to allocate sf_zshelf structure' )  ; RETURN
       ENDIF
       CALL iom_open ( trim(sn_zshelf%clname), inum )                           ! open file
-      CALL iom_get  ( inum, jpdom_data, sn_zshelf%clvar,  sf_zshelf)   ! read the river mouth array
+      CALL iom_get  ( inum, jpdom_data, sn_zshelf%clvar,  sf_zshelf)   ! read the zshelf array
       CALL iom_close( inum )                                        ! close file
-      !ALLOCATE( sf_zshelf(1)%fnow(jpi,jpj,1)   )
-      !IF( sn_zshelf%ln_tint ) ALLOCATE( sf_zshelf(1)%fdta(jpi,jpj,1,1) )
-      !CALL fld_fill( sf_zshelf, (/ sn_zshelf /), cn_dir_f, 'sbc_zshelf_init_f', 'read runoffs data', 'namsbc_fwf' )
+
+      ALLOCATE( sf_zdraft(jpi,jpj))
+      IF(lwp) WRITE(numout,*)
+      IF(lwp) WRITE(numout,*) '          basal melt distribution bottom depth read in a file'
+      IF( ierror > 0 ) THEN
+         CALL ctl_stop( 'sbc_zdraft: unable to allocate sf_zdraft structure' )  ; RETURN
+      ENDIF
+      CALL iom_open ( trim(sn_zdraft%clname), inum )                           ! open file
+      CALL iom_get  ( inum, jpdom_data, sn_zdraft%clvar,  sf_zdraft)   ! read the zdraft array
+      CALL iom_close( inum )                                        ! close file
+
 
    END SUBROUTINE sbc_fwf_init
 
    SUBROUTINE sbc_fwf_bm( kt )
+      !!---------------------------------------------------------------------
+      !!                    ***  ROUTINE sbc_fwf_bm ***
+      !!
+      !! ** Purpose : distribute freshwater and latent heat fluxes from basal melt uniformly
+      !!              between zdraft (bottom of ice shelf front) to zshelf (grounding line/seabed depth)
+      !!              and account for associated sea surface height changes
+      !!
+      !! ** Method  : read zshelf, zdraft and sf_rnf_f fields from netcdf
+      !!
+      !! ** Action  : update `tsb` and`sshb` at each time step
+      !!----------------------------------------------------------------------   
+      
       INTEGER                              , INTENT(in   ) ::   kt          ! ocean time-step index
       !INTEGER                              , INTENT(in   ) ::   kit000      ! first time step index
       INTEGER  ::  ji, jj, jk                ! dummy loop indices
@@ -125,25 +148,39 @@ CONTAINS
             DO jj = 1, jpj                    
                DO ji = 1, jpi                 
                   IF( sf_zshelf(ji,jj) .GT. 0.) THEN
-                     IF( gdept_n(ji,jj,jk) .LE. sf_zshelf(ji,jj) ) THEN
-                        ! Computations assume m3 as input, but we give input in kg m-2 s-1
-                        !tsb(ji,jj,jk,jp_tem) = tsb(ji,jj,jk,jp_tem) - 333.55/4.184 * &
-                        !   & sf_rnf_f(1)%fnow(ji,jj,1)/(e1t(ji,jj)*e2t(ji,jj)*(sf_zshelf(ji,jj)+sshb(ji,jj)))
-                      
-                        !tsb(ji,jj,jk,jp_sal) = tsb(ji,jj,jk,jp_sal) * (e1t(ji,jj)*e2t(ji,jj) * (sf_zshelf(ji,jj)+sshb(ji,jj))) & 
-                        !   &/(e1t(ji,jj)*e2t(ji,jj)*(sf_zshelf(ji,jj)+sshb(ji,jj)) + sf_rnf_f(1)%fnow(ji,jj,1))
-                      
-                        !sshb(ji,jj)=sshb(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1)/(e1t(ji,jj)*e2t(ji,jj))
+                     IF( sf_zdraft(ji,jj) .GT. 0.) THEN
+                        IF( gdept_n(ji,jj,jk) .GT. sf_zdraft(ji,jj) ) THEN
+                           IF( gdept_n(ji,jj,jk) .LE. sf_zshelf(ji,jj) ) THEN
+                              ! Computations assume m3 as input for sf_rnf_f
+                              !tsb(ji,jj,jk,jp_tem) = tsb(ji,jj,jk,jp_tem) - 333.55/4.184 * &
+                              !   & sf_rnf_f(1)%fnow(ji,jj,1)/(e1t(ji,jj)*e2t(ji,jj)*(sf_zshelf(ji,jj)+sshb(ji,jj)))
+                           
+                              !tsb(ji,jj,jk,jp_sal) = tsb(ji,jj,jk,jp_sal) * (e1t(ji,jj)*e2t(ji,jj) * (sf_zshelf(ji,jj)+sshb(ji,jj))) & 
+                              !   &/(e1t(ji,jj)*e2t(ji,jj)*(sf_zshelf(ji,jj)+sshb(ji,jj)) + sf_rnf_f(1)%fnow(ji,jj,1))
+                           
+                              !sshb(ji,jj)=sshb(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1)/(e1t(ji,jj)*e2t(ji,jj))
 
-                        ! Computations assuming kg m-2 s-1 as input for sf_rnf_f;  convert kg to m3; remove grid cell area from computations)
-                        ! To be done: add specific heat capacity of water (cpw = 4184.0_wp ? should be ocean water?) and density (rhow) to phycst.F90
-                        tsb(ji,jj,jk,jp_tem) = tsb(ji,jj,jk,jp_tem) - lfus / 4184.0 * &
-                           & sf_rnf_f(1)%fnow(ji,jj,1)*1.e-3*2700/(sf_zshelf(ji,jj)+sshb(ji,jj))
-                      
-                        tsb(ji,jj,jk,jp_sal) = tsb(ji,jj,jk,jp_sal) * (sf_zshelf(ji,jj)+sshb(ji,jj)) & 
-                           &/(sf_zshelf(ji,jj)+sshb(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1)*1.e-3*2700)
-                      
-                        sshb(ji,jj)=sshb(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1)*1.e-3*2700
+                              ! Computations assuming kg m-2 s-1 as input for sf_rnf_f: distribution from sshb to zshelf
+                              ! To be done: add specific heat capacity of water (cpw = 4184.0_wp) and density (rhow = 1.e-3) to phycst.F90
+                              ! Note: zshelf should be defined at depth layer bounds in netcdf file
+                              !tsb(ji,jj,jk,jp_tem) = tsb(ji,jj,jk,jp_tem) - lfus / 4184.0 * &
+                              !   & sf_rnf_f(1)%fnow(ji,jj,1) * 1.e-3 * 2700 / ( sf_zshelf(ji,jj) + sshb(ji,jj) )
+                           
+                              !tsb(ji,jj,jk,jp_sal) = tsb(ji,jj,jk,jp_sal) * ( sf_zshelf(ji,jj) + sshb(ji,jj) ) & 
+                              !   &/( sf_zshelf(ji,jj) + sshb(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1) * 1.e-3 * 2700 )
+                           
+                              !sshb(ji,jj) = sshb(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1) * 1.e-3 * 2700
+
+                              ! Computations assuming kg m-2 s-1 as input for sf_rnf_f: distribution from zdraft to zshelf
+                              tsb(ji,jj,jk,jp_tem) = tsb(ji,jj,jk,jp_tem) - lfus / 4184.0 * &
+                              & sf_rnf_f(1)%fnow(ji,jj,1) * 1.e-3 * 2700 / ( sf_zshelf(ji,jj) - sf_zdraft(ji,jj) )
+                        
+                              tsb(ji,jj,jk,jp_sal) = tsb(ji,jj,jk,jp_sal) * ( sf_zshelf(ji,jj) - sf_zdraft(ji,jj) ) & 
+                              &/( sf_zshelf(ji,jj) - sf_zdraft(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1) * 1.e-3 * 2700 )
+                        
+                              sshb(ji,jj) = sshb(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1) * 1.e-3 * 2700
+                           ENDIF
+                        ENDIF
                      ENDIF     
                   ENDIF
                END DO

@@ -1111,8 +1111,9 @@ do
     elif [ $fwf -eq 4 ]; then
         ln -fs ${start_dir}/fwf/runoff_maps_fwf_AIS.nc runoff_maps.nc
         echo "fwf=$fwf: linear response function forcing - linked modified runoff_maps.nc with AIS region removed"
-        ln -fs ${start_dir}/fwf/interactive/input/zshelf.nc zshelf.nc
-        echo "linked zshelf.nc; depth for basal melt"
+        ln -fs ${start_dir}/fwf/interactive/input/zshelf_700m.nc zshelf.nc
+        ln -fs ${start_dir}/fwf/interactive/input/zshelf_200m.nc zdraft.nc
+        echo "linked zshelf.nc files; depth range for basal melt distribution"
         forcing_dir=${start_dir}/fwf/interactive/forcing_files/${exp_name}
         #forcing_dir=${run_dir}/../fwf/${exp_name}
         # Note: the file FWF_LRF_y????.nc of the first runyear should be in the forcing_dir before running EC-Earth
@@ -1127,7 +1128,7 @@ do
             #mkdir -p ${forcing_dir}
             #cp ${input_dir}/FWF_LRF_y${leg_start_date_yyyy}.nc ${forcing_dir}
         #elif [ ${leg_start_date} -gt ${run_start_date} ]; then
-        #    ln -fs ${forcing_dir}/FWF_LRF_y${leg_start_date_yyyy}.nc freshwater_forcing_y${leg_start_date_yyyy}.nc
+        #    ln -fs ${forcing_dir}/FWF_LRF_y${leg_start_date_yyyy}.nc freshwater_forcing_y${leg_start_dcdate_yyyy}.nc
         #    echo "linked runoff forcing file of year=${leg_start_date_yyyy}"
         fi
     else

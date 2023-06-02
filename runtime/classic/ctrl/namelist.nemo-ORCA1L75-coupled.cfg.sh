@@ -182,6 +182,7 @@ cat << EOF
    sn_rnf_f = 'freshwater_forcing',              -1, 'sorunoff_f' , .true.     , .false., 'yearly' , ''       , ''       , ''
    sn_cal_f = 'freshwater_forcing',              -1, 'socalving_f', .true.     , .false., 'yearly' , ''       , ''       , ''
    sn_zshelf = 'zshelf',                          0, 'zshelf',      .false.    , .true.,  'yearly' , ''       , ''       , ''
+   sn_zdraft = 'zdraft',                          0, 'zshelf',      .false.    , .true.,  'yearly' , ''       , ''       , ''
 /
 !-----------------------------------------------------------------------
 &namsbc_rnf    !   runoffs namelist surface boundary condition
