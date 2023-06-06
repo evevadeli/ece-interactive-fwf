@@ -11,7 +11,7 @@ import sys
 import ThetaoSectors as TS
 import BasalMelt as BM
 import FreshWaterForcing as FWF
-from config import gamma, ism, bm, running_mean_period
+from config import gamma, ism, bm, running_mean_period, bm_dep1, bm_dep2
 
 
 print('Number of arguments:', len(sys.argv), 'arguments.')
@@ -56,11 +56,15 @@ file_baseline_thetao = f'{path_input}/OceanSectorThetao_piControl.csv'
 file_baseline_fwf = f'{path_input}/TotalFW_Gt_1850_1930.txt' # !replace with piControl mean --> config?
 
 #file_distribution_area = f'{path_input}/FriverDistributionArea_AIS_ORCA1.txt' # !compute in script from mask + area
-file_distribution_mask = f'{path_input}/FriverDistributionMask_AIS_ORCA1.nc'
+#file_distribution_mask = f'{path_input}/FriverDistributionMask_AIS_ORCA1.nc'
+file_basal_melt_mask = f'{path_input}/basal_melt_mask_ORCA1_ocean.nc'
+file_calving_mask = f'{path_input}/calving_mask_ORCA1_ocean.nc'
 
 ## Output data
 ## FWF for EC-Earth (freshwater forcing computed from year yyyy is applied in year yyyy+1)
 file_forcing = f'{path_forcing_file}/FWF_LRF_y{year+1}.nc'
+file_bm_depth1 = f'{path_input}/zshelf_{bm_dep1}m.nc'
+file_bm_depth2 =f'{path_input}/zshelf_{bm_dep2}m.nc'
 
 ## Basal melt in year yyyy affects freshwater forcing for the next 200 yrs (length of linear response functions)
 file_future_forcing = f'{path_output}/CumulativeFreshwaterForcingAnomaly_{exp_name}_Future.csv'
@@ -246,29 +250,48 @@ elif year>year_min:
 # Read distribution mask from file
 #with open(file_distribution_area) as f:
 #    distribution_area = f.read()
-distribution_mask = xr.open_dataset(file_distribution_mask)
+#distribution_mask = xr.open_dataset(file_distribution_mask)
+basal_melt_mask = xr.open_dataset(file_basal_melt_mask)
+calving_mask = xr.open_dataset(file_calving_mask)
+
 
 ## Open areacello dataarray and compute area corresponding with  distribution mask
 ds_area = xr.open_dataset(file_area)
-distribution_area = ds_area.areacello.where(distribution_mask.friver).sum('j').sum('i').values
-print('Freshwater distribution area: ', distribution_area, 'm^2')
+#distribution_area = ds_area.areacello.where(distribution_mask.friver).sum('j').sum('i').values
+#print('Freshwater distribution area: ', distribution_area, 'm^2')
 
-# Convert Gt yr-1 to kg m-2 s-1
-FWF_flux = df_total_FWF_Gt.values*kg_per_Gt/spy/float(distribution_area)
-
-# Apply flux to masked region
-FWF_distribution = FWF_flux*distribution_mask
-FWF_distribution = FWF_distribution.rename({'friver':'freshwater_flux'})
+basal_melt_area = ds_area.areacello.where(basal_melt_mask.basal_melt_mask).sum('j').sum('i').values
+calving_area = ds_area.areacello.where(calving_mask.calving_mask).sum('j').sum('i').values
+print('Basal melt area: ', basal_melt_area, 'm^2')
+print('Calving area: ', calving_area, 'm^2')
 
 #The distribution of this total meltwater flux between basal melt and calving is fixed using the observed mass loss by Rignot et al. 2013 
-FWF_calving = 0.45 * FWF_distribution
-FWF_basal_melt = 0.55 * FWF_distribution
+df_FWF_calving = 0.45 * df_total_FWF_Gt
+df_FWF_basal_melt = 0.55 * df_total_FWF_Gt
+
+# Convert Gt yr-1 to kg m-2 s-1
+#FWF_flux = df_total_FWF_Gt.values*kg_per_Gt/spy/float(distribution_area)
+basal_melt_flux = df_FWF_basal_melt.values*kg_per_Gt/spy/float(basal_melt_area)
+calving_flux = df_FWF_calving.values*kg_per_Gt/spy/float(calving_area)
+
+# Apply flux to masked region
+#FWF_distribution = FWF_flux*distribution_mask
+#FWF_distribution = FWF_distribution.rename({'friver':'freshwater_flux'})
+basal_melt_distribution = basal_melt_flux*basal_melt_mask
+calving_distribution = calving_flux*calving_mask
+
+#The distribution of this total meltwater flux between basal melt and calving is fixed using the observed mass loss by Rignot et al. 2013 
+#FWF_calving = 0.45 * FWF_distribution
+#FWF_basal_melt = 0.55 * FWF_distribution
 
 ##################### Create forcing file for NEMO ######################
 
 # Rename variables for nemo
-FWF_calving = FWF_calving.rename({'freshwater_flux':'socalving_f'})
-FWF_basal_melt = FWF_basal_melt.rename({'freshwater_flux':'sorunoff_f'})
+#FWF_calving = FWF_calving.rename({'freshwater_flux':'socalving_f'})
+#FWF_basal_melt = FWF_basal_melt.rename({'freshwater_flux':'sorunoff_f'})
+
+FWF_basal_melt = basal_melt_distribution.rename({'basal_melt_mask':'sorunoff_f'})
+FWF_calving = calving_distribution.rename({'calving_mask':'socalving_f'})
 
 ## (Re)open thetao dataset
 ds = xr.open_dataset(file_thetao)
@@ -295,6 +318,25 @@ if os.path.isfile(file_forcing):
     os.remove(file_forcing)    
 
 ds_FWF.to_netcdf(file_forcing, unlimited_dims=['time_counter'])
+
+# Create zshelf files based on horizontal basal melt distribution for basal melt distribution over depth
+if year==year_min:
+    d = 0
+    for depth in [bm_dep1, bm_dep2]:
+        print('Creating zshelf ncfile')
+        ds_bm_mask = xr.open_dataarray(file_basal_melt_mask)
+        ds_zshelf = ds_bm_mask.where(ds_bm_mask > 0)
+        ds_zshelf.name = 'zshelf'
+        ds_zshelf = ds_zshelf.fillna(0)
+        df_zshelf = ds_zshelf.values
+        df_zshelf[df_zshelf>0] = depth
+        ds_zshelf.attrs = {'long_name':'basal melt depth', 'units':'m'}
+        ds_zshelf = ds_zshelf.expand_dims({'time_counter': 1})
+        file_bm=[file_bm_depth1, file_bm_depth2]
+        print('for depth = '+ str(depth) +' m:')
+        print(file_bm[d])
+        ds_zshelf.to_netcdf(file_bm[d], unlimited_dims=['time_counter'])
+        d += 1
 
 print("##### FINISHED FRESHWATER FORCING COMPUTATION")
 
