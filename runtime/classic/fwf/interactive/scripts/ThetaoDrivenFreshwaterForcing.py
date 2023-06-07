@@ -11,7 +11,7 @@ import sys
 import ThetaoSectors as TS
 import BasalMelt as BM
 import FreshWaterForcing as FWF
-from config import gamma, ism, bm, running_mean_period, bm_dep1, bm_dep2
+from config import gamma, ism, bm, running_mean_period, bm_dep1, bm_dep2, FWF_total_yearmin
 
 
 print('Number of arguments:', len(sys.argv), 'arguments.')
@@ -53,7 +53,7 @@ file_thetao = f'{run_dir}/output/nemo/{leg_number}/{exp_name}_1m_{year}0101_{yea
 
 file_area = f'{path_input}/areacello_Ofx_EC-Earth3_historical_r1i1p1f1_gn.nc'
 file_baseline_thetao = f'{path_input}/OceanSectorThetao_piControl.csv'
-file_baseline_fwf = f'{path_input}/TotalFW_Gt_1850_1930.txt' # !replace with piControl mean --> config?
+#file_baseline_fwf = f'{path_input}/TotalFW_Gt_piControl.txt' # !value computed by Erwin
 
 #file_distribution_area = f'{path_input}/FriverDistributionArea_AIS_ORCA1.txt' # !compute in script from mask + area
 #file_distribution_mask = f'{path_input}/FriverDistributionMask_AIS_ORCA1.nc'
@@ -63,8 +63,8 @@ file_calving_mask = f'{path_input}/calving_mask_ORCA1_ocean.nc'
 ## Output data
 ## FWF for EC-Earth (freshwater forcing computed from year yyyy is applied in year yyyy+1)
 file_forcing = f'{path_forcing_file}/FWF_LRF_y{year+1}.nc'
-file_bm_depth1 = f'{path_input}/zshelf_{bm_dep1}m.nc'
-file_bm_depth2 =f'{path_input}/zshelf_{bm_dep2}m.nc'
+file_bm_depth1 = f'{path_forcing_file}/basal_melt_depth1.nc' #shallowest depth
+file_bm_depth2 =f'{path_forcing_file}/basal_melt_depth2.nc' # deepest depth
 
 ## Basal melt in year yyyy affects freshwater forcing for the next 200 yrs (length of linear response functions)
 file_future_forcing = f'{path_output}/CumulativeFreshwaterForcingAnomaly_{exp_name}_Future.csv'
@@ -216,14 +216,14 @@ elif year>year_min:
 
 ######################### Total freshwater forcing ##########################
 # Read baseline freshwater forcing (computed from precipitation, evaporation and runoff) from file
-with open(file_baseline_fwf ) as f:
-    FWF_AIS_baseline_Gt = f.read()
+#with open(file_baseline_fwf ) as f:
+#    FWF_AIS_baseline_Gt = f.read()
 
 # Total change in freshwater forcing: sum over 5 regions
 sum_dFWF_Gt = df_dFWF.sum(axis=1)
 
 # Add baseline FWF to sum of anomalies
-df_total_FWF_Gt = sum_dFWF_Gt + float(FWF_AIS_baseline_Gt)
+df_total_FWF_Gt = sum_dFWF_Gt + FWF_total_yearmin
 # Add index 'year' to dataframe
 df_total_FWF_Gt.index=[year]
 df_total_FWF_Gt.index.name = 'year'
@@ -323,15 +323,27 @@ ds_FWF.to_netcdf(file_forcing, unlimited_dims=['time_counter'])
 if year==year_min:
     d = 0
     for depth in [bm_dep1, bm_dep2]:
+        # Find oceanic layers that sit fully within the depth bounds
+        if d == 0:
+            lev_ind = TS.nearest_above(ds_lev_bnds[:,0],depth) #above = deeper than
+            depth_nemo = ds_lev_bnds[lev_ind,0].values
+            print('Upper bound of ocean layer used for basal melt distribution: ' , depth_nemo, ' m')
+        elif d == 1:
+            lev_ind= TS.nearest_below(ds_lev_bnds[:,1],depth) #below = shallower than
+            depth_nemo = ds_lev_bnds[lev_ind,1].values
+            print('Lower bound of ocean layer used for basal melt distribution: ' , depth_nemo, ' m')
+
         print('Creating zshelf ncfile')
         ds_bm_mask = xr.open_dataarray(file_basal_melt_mask)
+
         ds_zshelf = ds_bm_mask.where(ds_bm_mask > 0)
-        ds_zshelf.name = 'zshelf'
+        ds_zshelf.name = 'bmdepth'
         ds_zshelf = ds_zshelf.fillna(0)
         df_zshelf = ds_zshelf.values
-        df_zshelf[df_zshelf>0] = depth
+        df_zshelf[df_zshelf>0] = depth_nemo
         ds_zshelf.attrs = {'long_name':'basal melt depth', 'units':'m'}
         ds_zshelf = ds_zshelf.expand_dims({'time_counter': 1})
+
         file_bm=[file_bm_depth1, file_bm_depth2]
         print('for depth = '+ str(depth) +' m:')
         print(file_bm[d])
