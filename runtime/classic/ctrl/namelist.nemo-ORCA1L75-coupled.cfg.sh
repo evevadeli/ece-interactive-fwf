@@ -181,8 +181,9 @@ cat << EOF
    cn_dir_f = './'  !  root directory for the location of the runoff files
    sn_rnf_f = 'freshwater_forcing',              -1, 'sorunoff_f' , .true.     , .false., 'yearly' , ''       , ''       , ''
    sn_cal_f = 'freshwater_forcing',              -1, 'socalving_f', .true.     , .false., 'yearly' , ''       , ''       , ''
-   sn_zshelf = 'zshelf',                          0, 'zshelf',      .false.    , .true.,  'yearly' , ''       , ''       , ''
-   sn_zdraft = 'zdraft',                          0, 'zshelf',      .false.    , .true.,  'yearly' , ''       , ''       , ''
+   sn_zdraft = 'basal_melt_depth1',               0, 'bmdepth',     .false.    , .true.,  'yearly' , ''       , ''       , ''
+   sn_zshelf = 'basal_melt_depth2',               0, 'bmdepth',     .false.    , .true.,  'yearly' , ''       , ''       , ''
+
 /
 !-----------------------------------------------------------------------
 &namsbc_rnf    !   runoffs namelist surface boundary condition

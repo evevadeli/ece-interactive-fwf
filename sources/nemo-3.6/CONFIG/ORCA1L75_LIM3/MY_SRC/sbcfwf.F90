@@ -102,7 +102,7 @@ CONTAINS
 
       ALLOCATE( sf_zshelf(jpi,jpj))
       IF(lwp) WRITE(numout,*)
-      IF(lwp) WRITE(numout,*) '          basal melt distribution top depth read in a file'
+      IF(lwp) WRITE(numout,*) '          basal melt distribution bottom depth (depth 2) read in a file'
       IF( ierror > 0 ) THEN
          CALL ctl_stop( 'sbc_zshelf: unable to allocate sf_zshelf structure' )  ; RETURN
       ENDIF
@@ -112,7 +112,7 @@ CONTAINS
 
       ALLOCATE( sf_zdraft(jpi,jpj))
       IF(lwp) WRITE(numout,*)
-      IF(lwp) WRITE(numout,*) '          basal melt distribution bottom depth read in a file'
+      IF(lwp) WRITE(numout,*) '          basal melt distribution top depth (depth 1) read in a file'
       IF( ierror > 0 ) THEN
          CALL ctl_stop( 'sbc_zdraft: unable to allocate sf_zdraft structure' )  ; RETURN
       ENDIF
@@ -142,16 +142,14 @@ CONTAINS
       !
       !CALL wrk_alloc( jpi, jpj, jpkm )
       !
-      !!Convert kg m-3 s-1 to m3 (per time step (2700s)) for sf_rnf_f
-
          DO jk = 1, jpk                     
             DO jj = 1, jpj                    
                DO ji = 1, jpi                 
                   IF( sf_zshelf(ji,jj) .GT. 0.) THEN
                      IF( sf_zdraft(ji,jj) .GT. 0.) THEN
                         IF( gdept_n(ji,jj,jk) .GT. sf_zdraft(ji,jj) ) THEN
-                           IF( gdept_n(ji,jj,jk) .LE. sf_zshelf(ji,jj) ) THEN
-                              ! Computations assume m3 as input for sf_rnf_f
+                           IF( gdept_n(ji,jj,jk) .LT. sf_zshelf(ji,jj) ) THEN
+                              ! Computations assume m3 as input for sf_rnf_f;  distribution from sshb to zshelf
                               !tsb(ji,jj,jk,jp_tem) = tsb(ji,jj,jk,jp_tem) - 333.55/4.184 * &
                               !   & sf_rnf_f(1)%fnow(ji,jj,1)/(e1t(ji,jj)*e2t(ji,jj)*(sf_zshelf(ji,jj)+sshb(ji,jj)))
                            
@@ -159,17 +157,6 @@ CONTAINS
                               !   &/(e1t(ji,jj)*e2t(ji,jj)*(sf_zshelf(ji,jj)+sshb(ji,jj)) + sf_rnf_f(1)%fnow(ji,jj,1))
                            
                               !sshb(ji,jj)=sshb(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1)/(e1t(ji,jj)*e2t(ji,jj))
-
-                              ! Computations assuming kg m-2 s-1 as input for sf_rnf_f: distribution from sshb to zshelf
-                              ! To be done: add specific heat capacity of water (cpw = 4184.0_wp) and density (rhow = 1.e-3) to phycst.F90
-                              ! Note: zshelf should be defined at depth layer bounds in netcdf file
-                              !tsb(ji,jj,jk,jp_tem) = tsb(ji,jj,jk,jp_tem) - lfus / 4184.0 * &
-                              !   & sf_rnf_f(1)%fnow(ji,jj,1) * 1.e-3 * 2700 / ( sf_zshelf(ji,jj) + sshb(ji,jj) )
-                           
-                              !tsb(ji,jj,jk,jp_sal) = tsb(ji,jj,jk,jp_sal) * ( sf_zshelf(ji,jj) + sshb(ji,jj) ) & 
-                              !   &/( sf_zshelf(ji,jj) + sshb(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1) * 1.e-3 * 2700 )
-                           
-                              !sshb(ji,jj) = sshb(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1) * 1.e-3 * 2700
 
                               ! Computations assuming kg m-2 s-1 as input for sf_rnf_f: distribution from zdraft to zshelf
                               tsb(ji,jj,jk,jp_tem) = tsb(ji,jj,jk,jp_tem) - lfus / 4184.0 * &

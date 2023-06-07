@@ -422,7 +422,7 @@ CONTAINS
 
       IF( ln_fwf         )  then
           CALL sbc_fwf( kt )                   ! add additional fresh water fluxes (forced runoff + calving)
-        ! Adjust sea surface height, ocean temperature and salinity for basal melting
+        ! Adjust sea surface height, ocean temperature and salinity fields for basal melt input
           IF( kt == nit000 ) THEN
             CALL sbc_fwf_bm( kt )
          ENDIF
