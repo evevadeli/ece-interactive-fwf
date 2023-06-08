@@ -52,7 +52,7 @@ kg_per_Gt         = 1e12         # [kg] to [Gt]
 ############################# Create FWF_LRF_y1850.nc (first year freshwater forcing) #################
 
 # Baseline FWF freshwater forcing piControl mean
-FWF_total_Gt = FWF_total_piControl # 3300 Gt/yr
+FWF_total_Gt = FWF_total_yearmin # Gt/yr
 print('Total freshwater forcing: ', FWF_total_Gt, ' Gt per yr')
 
 # Open masks for calving and basal melt
