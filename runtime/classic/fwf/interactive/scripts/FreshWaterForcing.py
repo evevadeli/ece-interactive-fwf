@@ -16,9 +16,25 @@ def freshwater_flux_anomaly_df(t, length, BM, RF, file_future_fwf):
     '''
 
     if t==0:
+        try:
+            dfFWF = pd.DataFrame(0,index=range(length),columns=BM.columns) # creaty empty dataframe
+            dfFWF = pd.read_csv(file_future_fwf, index_col=0)
+            print('Use existing dataframe dfFWF')
+            dfFWF.index = range(len(dfFWF))
+            # adjust length of file_future_fwf, pad with 0 if necessary
+            if len(dfFWF) >= length:
+                dfFWF = dfFWF[:length]
+            else:
+                for i in range(len(dfFWF),length):
+                    dfFWF.loc[i] = 0
+            
+        except FileNotFoundError:
+            print('Initialise empty dataframe dfFWF')
+            dfFWF = pd.DataFrame(0,index=range(length),columns=BM.columns) # creaty empty dataframe
         # Initialise dfFWF
         print('Initialise empty dataframe dfFWF')
         dfFWF = pd.DataFrame(0,index=range(length),columns=BM.columns) # creaty empty dataframe
+
     elif t > 0:
         dfFWF = pd.read_csv(file_future_fwf, index_col=0)
     # Contribution of basal melt in year to freshwater flux in future 200 years [year+1:year+201]
@@ -39,4 +55,5 @@ def freshwater_flux_anomaly_df(t, length, BM, RF, file_future_fwf):
     print(f'Saved future forcing to {file_future_fwf}')
     # Compute differences: annual forcing
     dfFWF_diff = dfFWF.diff()
+
     return (pd.DataFrame(dfFWF_diff.iloc[t]).T)

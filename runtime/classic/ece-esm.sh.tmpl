@@ -40,6 +40,10 @@ export exp_name=[[[MOD:GENERAL:EXP_NAME]]]
 run_start_date="[[[MOD:GENERAL:RUN_START_DATE]]]"
 run_end_date="[[[MOD:GENERAL:RUN_END_DATE]]]"
 
+# Years needed for freshwater forcing
+run_start_date_yyyy=$(date -u -d "${run_start_date}" +%Y)
+run_end_date_yyyy=$(date -u -d "${run_end_date}" +%Y)
+
 # Set $force_run_from_scratch to 'true' if you want to force this run to start
 # from scratch, possibly ignoring any restart files present in the run
 # directory. Leave set to 'false' otherwise.
@@ -78,17 +82,16 @@ use_machinefile=[[[PLT:ACTIVE:USE_MACHINEFILE]]]
 ece_info_file="ece.info"
 
 # Freshwater forced runs
-# fwf=0 standard implementation
-# fwf=1 (1) replace runoff_maps.nc and (2) use simple forcing runoffs
+# fwf=0 No forcing (standard implementation)
+# fwf=4 Interactive freshwater feedback
+# fwf=5 Prescribed constant freshwater forcing
 fwf=[[[MOD:NEM:FWF]]]
-echo "fwf=$fwf"
-
 if [[ $fwf -eq 0 ]]; then
     fwf_option='.false.'
-elif [[ $fwf -gt 0 ]]; then
+elif [[ $fwf -eq 4 || $fwf -eq 5 ]]; then
     fwf_option='.true.'
 else 
-    echo "fwf must be in [0,1,2,3,4,5], but is fwf=$fwf"
+    error "fwf ($fwf) must be 0, 4 or 5"
 fi
 
 # -----------------------------------------------------------------------------
@@ -931,11 +934,55 @@ do
         fi
 
         # ---------------------------------------------------------------------
-        # *** Files needed for the Runoff mapper (linked)
+        # *** Files needed for the Runoff mapper and Fresh Water forcing (linked)
         # ---------------------------------------------------------------------
 
-        has_config rnfmapper && \
-            ln -s ${ini_data_dir}/runoff-mapper/runoff_maps.nc
+        # Where yearly forcing files are written
+        fw_forcing_dir=${run_dir}/fwf/interactive/forcing_files
+
+        if has_config nemo rnfmapper
+        then 
+            if [ $fwf -eq 0 ]; then
+            ln -fs ${ini_data_dir}/runoff-mapper/runoff_maps.nc runoff_maps.nc
+            echo "linked runoff_maps.nc"
+            echo "standard runoff remapping applied, no freshwater forcing files copied"
+        elif [ $fwf -eq 1 ]; then
+            ln -fs ${start_dir}/fwf/runoff_maps_fwf.nc runoff_maps.nc
+            forcing_dir=${run_dir}/../../forcing/simple_forcing
+            ln -fs ${forcing_dir}/FWF_simple_ORCA${nem_res_hor}_y${leg_start_date_yyyy}.nc freshwater_forcing_y${leg_start_date_yyyy}.nc
+            echo "fwf=$fwf: simple forcing - linked modified runoff_maps.nc with GrIS and AIS regions removed"
+            echo "linked runoff forcing file of year=${leg_start_date_yyyy}"
+            if [ $leg_start_date_yyyy -eq 1985 ]; then
+                cp freshwater_forcing_y1985.nc freshwater_forcing_y1984.nc
+                echo "copied year 1985 forcing file as 1984"
+            fi
+        elif [ $fwf -eq 2 ]; then
+            ln -fs ${start_dir}/fwf/runoff_maps_fwf.nc runoff_maps.nc
+            echo "fwf=$fwf: complex forcing - linked modified runoff_maps.nc"
+            echo "FWF option 2; not implemented yet"
+        elif [[ $fwf -eq 4 || $fwf -eq 5 ]]; then
+            ln -fs ${ini_data_dir}/nemo/fwf/runoff_maps_fwf_AIS.nc runoff_maps.nc
+            info "fwf=$fwf: linear response function forcing - linked modified runoff_maps.nc with AIS region removed"
+            #forcing_dir=${start_dir}/fwf/interactive/forcing_files/${exp_name}
+            ln -fs ${ini_data_dir}/nemo/fwf/interactive/input/basal_melt_depth1.nc basal_melt_depth1.nc
+            ln -fs ${ini_data_dir}/nemo/fwf/interactive/input/basal_melt_depth2.nc basal_melt_depth2.nc
+            info "linked basal_melt_depth.nc files; depth range for basal melt distribution"
+                    
+            mkdir -p ${fw_forcing_dir}
+            
+            # Initial FWF
+            cp ${ini_data_dir}/nemo/fwf/interactive/input/FWF_LRF_y${leg_start_date_yyyy}.nc ${fw_forcing_dir}
+            
+            # Need a FWF file for the year before the start date
+            ln -s ${fw_forcing_dir}/FWF_LRF_y${leg_start_date_yyyy}.nc freshwater_forcing_y$((${leg_start_date_yyyy}-1)).nc
+            
+            # Thetao climatology
+            cp ${ini_data_dir}/nemo/fwf/interactive/input/OceanSectorThetao_piControl.csv ${fw_forcing_dir}
+            fi
+        else
+            error "fwf ($fwf) supported options are 0, 4 and 5" 
+        fi
+
 
         # -------------------------------------------------------------------------
         # *** File and dir needed for TM5
@@ -1076,6 +1123,12 @@ do
         # NEMO files
         rm -f ${exp_name}_??_????????_????????_{grid_U,grid_V,grid_W,grid_T,icemod,SBC,scalar,SBC_scalar,diad_T}.nc
 
+        # FWF file
+        prev_fwf=freshwater_forcing_y$((${leg_start_date_yyyy}-2)).nc
+        [[ -h $prev_fwf ]] && rm -f $prev_fwf 
+        next_fwf=freshwater_forcing_y$((${leg_start_date_yyyy})).nc
+        [[ -h $next_fwf ]] && rm -f $next_fwf
+
         # TM5 restart file type
         tm5_istart=33
 
@@ -1086,55 +1139,36 @@ do
 
     fi # ! $leg_is_restart
 
-     # ---------------------------------------------------------------------
-    # *** link Runoff mapper and Freshwater forcing files
     # ---------------------------------------------------------------------
-
-    if [ $fwf -eq 0 ]; then
-        ln -fs ${ini_data_dir}/runoff-mapper/runoff_maps.nc runoff_maps.nc
-        echo "linked runoff_maps.nc"
-        echo "standard runoff remapping applied, no freshwater forcing files copied"
-    elif [ $fwf -eq 1 ]; then
-        ln -fs ${start_dir}/fwf/runoff_maps_fwf.nc runoff_maps.nc
-        forcing_dir=${run_dir}/../../forcing/simple_forcing
-        ln -fs ${forcing_dir}/FWF_simple_ORCA${nem_res_hor}_y${leg_start_date_yyyy}.nc freshwater_forcing_y${leg_start_date_yyyy}.nc
-        echo "fwf=$fwf: simple forcing - linked modified runoff_maps.nc with GrIS and AIS regions removed"
-        echo "linked runoff forcing file of year=${leg_start_date_yyyy}"
-        if [ $leg_start_date_yyyy -eq 1985 ]; then
-            cp freshwater_forcing_y1985.nc freshwater_forcing_y1984.nc
-            echo "copied year 1985 forcing file as 1984"
+    # *** Freshwater forcing files
+    # ---------------------------------------------------------------------
+    if has_config nemo rnfmapper
+    then
+        #NOT-AVAILABLE-YET if [ $fwf -eq 1 ]; then
+        #NOT-AVAILABLE-YET     fw_forcing_dir=${run_dir}/../../forcing/simple_forcing [TO MOVE IN SETUP ABOVE]
+        #NOT-AVAILABLE-YET     ln -fs ${fw_forcing_dir}/FWF_simple_ORCA${nem_res_hor}_y${leg_start_date_yyyy}.nc freshwater_forcing_y${leg_start_date_yyyy}.nc
+        #NOT-AVAILABLE-YET     info "linked runoff forcing file of year=${leg_start_date_yyyy}"
+        #NOT-AVAILABLE-YET     if [ $leg_start_date_yyyy -eq 1985 ]; then
+        #NOT-AVAILABLE-YET         cp freshwater_forcing_y1985.nc freshwater_forcing_y1984.nc
+        #NOT-AVAILABLE-YET         info "copied year 1985 forcing file as 1984"
+        #NOT-AVAILABLE-YET     fi
+        #NOT-AVAILABLE-YET elif [ $fwf -eq 2 ]; then
+        #NOT-AVAILABLE-YET     ln -fs ${start_dir}/fwf/runoff_maps_fwf.nc runoff_maps.nc
+        #NOT-AVAILABLE-YET     info "fwf=$fwf: complex forcing - linked modified runoff_maps.nc"
+        #NOT-AVAILABLE-YET     error "FWF option 2; not implemented yet"
+            
+        if [ $fwf -eq 4 ]
+        then
+            ln -s ${fw_forcing_dir}/FWF_LRF_y${leg_start_date_yyyy}.nc freshwater_forcing_y${leg_start_date_yyyy}.nc
+            info "linked runoff forcing file of year=${leg_start_date_yyyy}"
         fi
-    elif [ $fwf -eq 2 ]; then
-        ln -fs ${start_dir}/fwf/runoff_maps_fwf.nc runoff_maps.nc
-        echo "fwf=$fwf: complex forcing - linked modified runoff_maps.nc"
-        echo "FWF option 2; not implemented yet"
-    elif [ $fwf -eq 4 ]; then
-        ln -fs ${start_dir}/fwf/runoff_maps_fwf_AIS.nc runoff_maps.nc
-        echo "fwf=$fwf: linear response function forcing - linked modified runoff_maps.nc with AIS region removed"
-        forcing_dir=${start_dir}/fwf/interactive/forcing_files/${exp_name}
-        ln -fs ${forcing_dir}/basal_melt_depth1.nc basal_melt_depth1.nc
-        ln -fs ${forcing_dir}/basal_melt_depth2.nc basal_melt_depth2.nc
-        echo "linked zshelf.nc files; depth range for basal melt distribution"
-        #forcing_dir=${run_dir}/../fwf/${exp_name}
-        # Note: the file FWF_LRF_y????.nc of the first runyear should be in the forcing_dir before running EC-Earth
-        ln -fs ${forcing_dir}/FWF_LRF_y${leg_start_date_yyyy}.nc freshwater_forcing_y${leg_start_date_yyyy}.nc
-        echo "linked runoff forcing file of year=${leg_start_date_yyyy}"
-        if [ ${leg_start_date} -eq ${run_start_date} ]; then
-            #input_dir=${start_dir}/fwf/interactive/input
-            #ln -fs ${input_dir}/FWF_LRF_y${leg_start_date_yyyy}.nc freshwater_forcing_y${leg_start_date_yyyy}.nc
-            #echo "linked runoff forcing file of year=${leg_start_date_yyyy}"
-            cp freshwater_forcing_y${leg_start_date_yyyy}.nc freshwater_forcing_y$((${leg_start_date_yyyy}-1)).nc
-            echo "copied year ${leg_start_date_yyyy} forcing file as $((${leg_start_date_yyyy}-1))"
-            #mkdir -p ${forcing_dir}
-            #cp ${input_dir}/FWF_LRF_y${leg_start_date_yyyy}.nc ${forcing_dir}
-        #elif [ ${leg_start_date} -gt ${run_start_date} ]; then
-        #    ln -fs ${forcing_dir}/FWF_LRF_y${leg_start_date_yyyy}.nc freshwater_forcing_y${leg_start_dcdate_yyyy}.nc
-        #    echo "linked runoff forcing file of year=${leg_start_date_yyyy}"
+        
+        if [ $fwf -eq 5 ]
+        then
+            ln -s ${fw_forcing_dir}/FWF_LRF_y${run_start_date_yyyy}.nc freshwater_forcing_y${leg_start_date_yyyy}.nc
+            info "linked runoff constant forcing file of year=${leg_start_date_yyyy}"
         fi
-    else
-        echo "fwf must be in [0,1,2,3,4,5] but is fwf=$fwf" 
     fi
-
 
     #--------------------------------------------------------------------------
     # *** Surface restoring and ocean nudging options
@@ -1929,21 +1963,36 @@ do
 
     #jobid=$(sbatch ec-e....)
     #sbatch -d afterok:$jobid pywr 
+    info "Start freshwater forcing computation"
+    module load python3
 
-    #### Call python script for freshwater forcing computation ####
-    if [ $fwf -eq 4 ]; then
-        echo "Start freshwater forcing computation"
-
-        # Years needed for freshwater forcing
-        run_start_date_yyyy=$(date -u -d "${run_start_date}" +%Y)
-        run_end_date_yyyy=$(date -u -d "${run_end_date}" +%Y)
-
+     if [ $fwf -eq 4 ]; then
         # Compute freshwater forcing for next year
-        ${start_dir}/fwfwrapper.sh ${run_start_date_yyyy} ${run_end_date_yyyy} ${leg_start_date_yyyy} ${leg_number} ${exp_name} ${start_dir} ${run_dir}
+        time python3 ${start_dir}/fwf/interactive/scripts/ThetaoDrivenFreshwaterForcing.py \
+            ${run_start_date_yyyy} ${run_end_date_yyyy} \
+            ${leg_start_date_yyyy} $(printf %03d $((leg_number))) ${exp_name} ${ini_data_dir} ${run_dir}
+
         echo "Computed freshwater forcing for year $((${leg_start_date_yyyy}+1))"
+
+        # save files for restarts
+        outdir="${run_dir}/restart/fwf/$(printf %03d $((${leg_number}+1)))"
+        mkdir -p $outdir
+        cp ${run_dir}/fwf/interactive/forcing_files/*.csv $outdir
+        mv ${run_dir}/fwf/interactive/forcing_files/FWF_LRF_y$((${leg_start_date_yyyy}+1)).nc $outdir
+        ln -s $outdir/FWF_LRF_y$((${leg_start_date_yyyy}+1)).nc ${run_dir}/fwf/interactive/forcing_files
+
     fi
  
+
     
+    if [ $fwf -eq 5 ]; then
+        info "Analyze results for prescribed freshwater forcing"
+        python3 ${start_dir}/fwf/interactive/scripts/PrescribedFreshwaterForcing.py \
+             ${run_start_date_yyyy} ${run_end_date_yyyy} \
+             ${leg_start_date_yyyy} $(printf %03d $((leg_number))) ${exp_name} ${ini_data_dir} ${run_dir}
+        echo "Thetao analysis completed for year $((${leg_start_date_yyyy}+1))"
+    fi
+
 done # loop over legs
 
 # -----------------------------------------------------------------------------

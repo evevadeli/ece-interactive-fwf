@@ -20,7 +20,7 @@ MODULE sbcfwf
    IMPLICIT NONE
    PRIVATE
 
-   PUBLIC   sbc_fwf_init, sbc_fwf, sbc_fwf_bm        ! routines called by sbcmod.F90
+   PUBLIC   sbc_fwf_init, sbc_fwf, sbc_fwf_bm, sbc_fwf_output        ! routines called by sbcmod.F90
 
    INTEGER                                   ::   ierror
    INTEGER                                   ::   ios
@@ -43,7 +43,7 @@ MODULE sbcfwf
    TYPE(FLD_N)       , PUBLIC                ::   sn_rnf_f   
    !: information about the additionnal forced river runoff file to be read
    TYPE(FLD_N)       , PUBLIC                ::   sn_cal_f 
-   !: information about the additionnal forced river runoff file to be read
+   !: information about the additionnal forced calving file to be read
    TYPE(FLD_N)       , PUBLIC                ::   sn_zshelf 
    !: information about the basal melt depth file to be read
    TYPE(FLD_N)       , PUBLIC                ::   sn_zdraft
@@ -133,49 +133,64 @@ CONTAINS
       !!
       !! ** Method  : read zshelf, zdraft and sf_rnf_f fields from netcdf
       !!
-      !! ** Action  : update `tsb` and`sshb` at each time step
+      !! ** Action  : update `tsn` and`sshn` at each time step
       !!----------------------------------------------------------------------   
       
       INTEGER                              , INTENT(in   ) ::   kt          ! ocean time-step index
-      !INTEGER                              , INTENT(in   ) ::   kit000      ! first time step index
       INTEGER  ::  ji, jj, jk                ! dummy loop indices
-      !
-      !CALL wrk_alloc( jpi, jpj, jpkm )
-      !
-         DO jk = 1, jpk                     
-            DO jj = 1, jpj                    
-               DO ji = 1, jpi                 
-                  IF( sf_zshelf(ji,jj) .GT. 0.) THEN
-                     IF( sf_zdraft(ji,jj) .GT. 0.) THEN
-                        IF( gdept_n(ji,jj,jk) .GT. sf_zdraft(ji,jj) ) THEN
-                           IF( gdept_n(ji,jj,jk) .LT. sf_zshelf(ji,jj) ) THEN
-                              ! Computations assume m3 as input for sf_rnf_f;  distribution from sshb to zshelf
-                              !tsb(ji,jj,jk,jp_tem) = tsb(ji,jj,jk,jp_tem) - 333.55/4.184 * &
-                              !   & sf_rnf_f(1)%fnow(ji,jj,1)/(e1t(ji,jj)*e2t(ji,jj)*(sf_zshelf(ji,jj)+sshb(ji,jj)))
-                           
-                              !tsb(ji,jj,jk,jp_sal) = tsb(ji,jj,jk,jp_sal) * (e1t(ji,jj)*e2t(ji,jj) * (sf_zshelf(ji,jj)+sshb(ji,jj))) & 
-                              !   &/(e1t(ji,jj)*e2t(ji,jj)*(sf_zshelf(ji,jj)+sshb(ji,jj)) + sf_rnf_f(1)%fnow(ji,jj,1))
-                           
-                              !sshb(ji,jj)=sshb(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1)/(e1t(ji,jj)*e2t(ji,jj))
 
-                              ! Computations assuming kg m-2 s-1 as input for sf_rnf_f: distribution from zdraft to zshelf
-                              tsb(ji,jj,jk,jp_tem) = tsb(ji,jj,jk,jp_tem) - lfus / 4184.0 * &
-                              & sf_rnf_f(1)%fnow(ji,jj,1) * 1.e-3 * 2700 / ( sf_zshelf(ji,jj) - sf_zdraft(ji,jj) )
+      REAL(wp), PARAMETER  ::  temp_bm=0.    ! temp of basal melt (in deg C)
+      REAL(wp), POINTER, DIMENSION(:,:) ::  zthick, zdelta
+      !
+      CALL wrk_alloc( jpi, jpj, zthick, zelta )
+
+      ! Thickness of layer where freshwater is added
+      zthick(:,:) = sf_zshelf(:,:) - sf_zdraft(:,:)
+      
+      ! Computations assuming kg m-2 s-1 as input for sf_rnf_f
+      ! Thickness (in m) of freshwater
+      zdelta(:,:) = sf_rnf_f(1)%fnow(:,:,1) * 1.e-3 * rdt
+      
+      !!! add freshwater layer to SSH
+      !!!sshn(:,:) = sshn(:,:) + zdelta(:,:)
+      ! add freshwater mass from basal melt to E-P
+      emp(:,:) = emp(:,:) - sf_rnf_f(1)%fnow(:,:,1)
+      ! compensate freshening of top level because
+      ! salinity effects are added below at depth (like temp)
+      tsn(:,:,1,jp_sal) = tsn(:,:,1,jp_sal) * &
+      & e3t_n(:,:,1) / ( e3t_n(:,:,1)-zdelta(:,:) )
+      
+      ! distribute freshwater impact on temperature and salinity evenly from
+      ! zdraft to zshelf
+      do jk = 1, jpk
+         where ( gdept_n(:,:,jk)>sf_zdraft(:,:) .and. gdept_n(:,:,jk)<sf_zshelf(:,:) )
+            ! heat for generating basal melt
+             tsn(:,:,jk,jp_tem) = tsn(:,:,jk,jp_tem) - lfus / 4184.0 * &
+             & zdelta(:,:) / zthick(:,:)
+             ! salinity change from mixing BM from zdraft to zshelf
+             ! comment following block if salinity isn't corrected in top layer
+             tsn(:,:,jk,jp_sal) = tsn(:,:,jk,jp_sal) * zthick(:,:) &
+             &/( zthick(:,:) + zdelta(:,:) )
+         endwhere
                         
-                              tsb(ji,jj,jk,jp_sal) = tsb(ji,jj,jk,jp_sal) * ( sf_zshelf(ji,jj) - sf_zdraft(ji,jj) ) & 
-                              &/( sf_zshelf(ji,jj) - sf_zdraft(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1) * 1.e-3 * 2700 )
-                        
-                              sshb(ji,jj) = sshb(ji,jj) + sf_rnf_f(1)%fnow(ji,jj,1) * 1.e-3 * 2700
-                           ENDIF
-                        ENDIF
-                     ENDIF     
-                  ENDIF
-               END DO
-            END DO
-         END DO
-      !CALL wrk_dealloc( jpi, jpj, jpkm )
+         ! temperature and salinity change from mixing BM from surface to
+         ! zshelf
+         where ( gdept_n(:,:,jk)<sf_zshelf(:,:) )
+             tsn(:,:,jk,jp_tem) = tsn(:,:,jk,jp_tem) &
+             & + (temp_bm-tsn(:,:,jk,jp_tem)) / (sf_zshelf(:,:)/zdelta(:,:)+1.)
+             ! comment following block if salinity isn't corrected in top layer
+             !!!tsn(:,:,jk,jp_sal) = tsn(:,:,jk,jp_sal) * sf_zshelf(:,:) &
+             !& / ( sf_zshelf(:,:) + zdelta(:,:) )
+         endwhere
+      enddo
+      ! add basal melt to calving in the output (assuming it's all ice
+      ! that cools the ocean when melting)
+      calv(:,:) = calv(:,:) + sf_rnf_f(1)%fnow(:,:,1)
+      CALL wrk_dealloc( jpi, jpj, zthick, zdelta )
       !
    END SUBROUTINE sbc_fwf_bm
+
+   
 
    SUBROUTINE sbc_fwf ( kt )
       !!---------------------------------------------------------------------
@@ -185,17 +200,18 @@ CONTAINS
       !!
       !! ** Method  : read emp/qns fields from netcdf
       !!
-      !! ** Action  : update `rnf`,`emp_tot`,`emp_oce` and `qns_tot`
+      !! ** Action  : update `rnf`,`emp` and `qns`
       !!              at each time step with addtional freshwater forcing
       !!----------------------------------------------------------------------   
       INTEGER, INTENT(in) ::   kt   ! ocean time step
 
-      REAL(wp), POINTER, DIMENSION(:,:) ::  zemp_cal, zcptn
+      REAL(wp), POINTER, DIMENSION(:,:) ::  zemp_cal
 
       ! allocate
-      CALL wrk_alloc( jpi,jpj, zemp_cal, zcptn)
+      CALL wrk_alloc( jpi,jpj, zemp_cal)
       ! rnf, emp_tot, qns_tot  defined in sbc_oce.F90
       ! emp_oce                defined in sbc_ice.F90
+      ! Note: emp here is emp_oce, qns is qns_oce (Klaus Wyser, SMHI)
 
       ! forcing:   read additional forcing files
       CALL fld_read ( kt, nn_fsbc, sf_rnf_f )  ! Read forced Runoffs data and provide it at kt
@@ -208,15 +224,30 @@ CONTAINS
       ! add freshwater fluxes from calving to both ocean and total
       ! the so_calving_f field is defined as positive for fluxes into the ocean,
       ! so the upward calving flux is negative (and compatible with emp)
-      zemp_cal(:,:) = zemp_cal(:,:) - sf_cal_f(1)%fnow(:,:,1)
-      emp_oce(:,:) = emp_oce(:,:) + zemp_cal(:,:)
-      emp_tot(:,:) = emp_tot(:,:) + zemp_cal(:,:)
+      zemp_cal(:,:) = - sf_cal_f(1)%fnow(:,:,1)
+      emp(:,:) = emp(:,:) + zemp_cal(:,:)
+      
       ! WRITE(numout,*) 'forced runoffs.nc socalving_f fields added to `emp_tot` and `emp_oce` freshwater fluxes'
       
       ! add heat flux from calving
-      ! melting should result in negatve heat fluxi
-      qns_tot(:,:) = qns_tot(:,:) + zemp_cal(:,:) * lfus  ! assumes icebergs to be at melting point temperature
+      ! melting should result in negative heat flux
+      qns(:,:) = qns(:,:) + zemp_cal(:,:) * lfus  ! assumes icebergs to be at melting point temperature
       ! WRITE(numout,*) 'forced runoffs.nc socalving_f fields added to `qns_tot` heat flux'
+
+      ! add so_calving to calving from sbccpl
+      calv(:,:) = calv(:,:) + sf_cal_f(1)%fnow(:,:,1)
+      
+      ! deallocate
+      CALL wrk_dealloc( jpi,jpj, zemp_cal )
+
+   END SUBROUTINE sbc_fwf
+
+   SUBROUTINE sbc_fwf_output
+
+      REAL(wp), POINTER, DIMENSION(:,:) ::  zcptn
+
+      ! allocate
+      CALL wrk_alloc( jpi,jpj, zcptn )
 
       ! I/O: heat/freshwater fluxes
       ! these were originally in sbccpl.F90, commented them out there now
@@ -226,8 +257,10 @@ CONTAINS
       IF( iom_use('calving_cea' ) )  CALL iom_put( 'calving_cea' , - zemp_cal(:,:)        )  ! l.1538
 
       ! deallocate
-      CALL wrk_dealloc( jpi,jpj, zemp_cal )
+      CALL wrk_dealloc( jpi,jpj, zcptn )
 
-   END SUBROUTINE sbc_fwf
+   END SUBROUTINE sbc_fwf_output
+
+
 
 END MODULE sbcfwf

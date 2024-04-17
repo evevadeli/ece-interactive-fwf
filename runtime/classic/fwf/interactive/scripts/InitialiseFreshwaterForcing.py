@@ -31,12 +31,13 @@ path_forcing_file = f'{start_dir}/fwf/interactive/forcing_files/{exp_name}/' #Cr
 file_area = f'{path_input}/areacello_Ofx_EC-Earth3_historical_r1i1p1f1_gn.nc'
 file_basal_melt_mask = f'{path_input}/basal_melt_mask_ORCA1_ocean.nc'
 file_calving_mask = f'{path_input}/calving_mask_ORCA1_ocean.nc'
+file_deptho = '/ec/res4/hpcperm/nm6/ece3data/nemo/initial/ORCA1L75/bathy_meter.nc'
 
 # For lev_bnds & time_counter (12 months, to be replaced):
-run_dir = '/scratch/nk0j/ecearth3-cmip6'
-leg_number ='001'
-exp_name = '5icu'
-year = '1850'
+run_dir = '/scratch/nkaj/ecearth3'
+leg_number ='001' #001
+exp_name = 'sdl2'
+year = '1850' #1850
 file_thetao = f'{run_dir}/{exp_name}/output/nemo/{leg_number}/{exp_name}_1m_{year}0101_{year}1231_opa_grid_T_3D.nc' #other output format
 
 ## Output data
@@ -115,6 +116,10 @@ ds_FWF.to_netcdf(file_forcing, unlimited_dims=['time_counter'])
 
 ############################# Vertical distribution of basal melt ###################################
 # Create zshelf files based on horizontal basal melt distribution for basal melt distribution over depth
+# Read bathymetry
+ds_deptho = xr.open_dataset(file_deptho)
+df_deptho = ds_deptho.Bathymetry
+
 # Read lev bnds from file_thetao
 ds_lev_bnds = ds['olevel_bounds']
 
@@ -138,6 +143,7 @@ for depth in [bm_dep1, bm_dep2]:
     ds_zshelf = ds_zshelf.fillna(0)
     df_zshelf = ds_zshelf.values
     df_zshelf[df_zshelf>0] = depth_nemo
+    ds_zshelf.where(ds_zshelf>df_deptho, df_deptho.values, df_zshelf.values) #if shelfdepth deeper than bathymetry, keep bathymetry
     ds_zshelf.attrs = {'long_name':'basal melt depth', 'units':'m'}
     ds_zshelf = ds_zshelf.expand_dims({'time_counter': 1})
 
