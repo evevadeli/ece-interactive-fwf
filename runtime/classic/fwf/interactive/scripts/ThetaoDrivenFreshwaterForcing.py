@@ -11,7 +11,7 @@ import sys
 import ThetaoSectors as TS
 import BasalMelt as BM
 import FreshWaterForcing as FWF
-from config import gamma, ism, bm, running_mean_period, FWF_total_yearmin
+from config import gamma, ism, bm, fwf_distribution, running_mean_period, FWF_total_yearmin
 
 
 print('Number of arguments:', len(sys.argv), 'arguments.')
@@ -62,8 +62,8 @@ if not os.path.isfile(file_baseline_thetao):
     file_baseline_thetao = f'{path_input}/OceanSectorThetao_piControl.csv'
 print('Use baseline_thetao from '+file_baseline_thetao)
 
-file_basal_melt_mask = f'{path_input}/basal_melt_mask_ORCA1_ocean.nc'
-file_calving_mask = f'{path_input}/calving_mask_ORCA1_ocean.nc'
+file_basal_melt_mask = f'{path_input}/basal_melt_mask_LARMIP_ORCA1.nc'
+file_calving_mask = f'{path_input}/calving_mask_LARMIP_ORCA1.nc'
 
 ## Output data
 ## FWF for EC-Earth (freshwater forcing computed from year yyyy is applied in year yyyy+1)
@@ -81,6 +81,46 @@ output_dFWF =f'{path_output}/FreshwaterForcingAnomaly_{exp_name}.csv'
 output_FWF =f'{path_output}/TotalFreshwaterForcing_{exp_name}.csv'
 output_thetao_RM = f'{path_output}/OceanSectorThetao_{running_mean_period}yRM_{exp_name}.csv'
 
+##################### Basal melt and calving distribution##################################
+## Sector names, consistent with linear response functions
+sectors = ['eais','wedd','amun','ross','apen']
+
+# Basal melt and calving contribution per sector (Rignot 2013)
+bm_calv_distribution = pd.DataFrame(columns=['calv','bm', 'sum'],index=sectors)
+bm_calv_distribution.loc['eais'] = [15.5, 15.5, 31]
+bm_calv_distribution.loc['ross'] = [6, 3, 9]
+bm_calv_distribution.loc['amun'] = [9, 23, 32]
+bm_calv_distribution.loc['wedd'] = [12, 7, 19] 
+bm_calv_distribution.loc['apen'] = [2.5, 6.5, 9]
+bm_calv_distribution.loc['sum'] = [45, 55, 100]
+
+# Calving distribution from source (row) to sink (column) per sector (Rignot 2013)
+source_sink_calv_distribution = pd.DataFrame(0,columns=sectors,index=sectors)
+# Source amun
+#df.loc[row_indexer, "col"] = values
+source_sink_calv_distribution.loc['amun','amun'] = 30
+source_sink_calv_distribution.loc['amun','ross'] = 30
+source_sink_calv_distribution.loc['amun','eais'] = 20
+source_sink_calv_distribution.loc['amun','wedd'] = 20
+
+
+#Source ross
+source_sink_calv_distribution.loc['ross','ross'] = 30
+source_sink_calv_distribution.loc['ross','eais'] = 20
+source_sink_calv_distribution.loc['ross','wedd'] = 50
+
+#Source eais
+source_sink_calv_distribution.loc['eais','eais'] = 40
+source_sink_calv_distribution.loc['eais','wedd'] = 60
+
+#Source wedd
+source_sink_calv_distribution.loc['wedd','wedd'] = 100
+
+#Source apen
+source_sink_calv_distribution.loc['apen','apen'] = 100
+
+
+
 ##################### Sector mean thetao computation ############################
 
 ## Open thetao dataset + rename dimensions (to be consistent with areacello file)
@@ -95,9 +135,6 @@ ds_lev_bnds = ds['olevel_bounds']
 
 ## Open areacello dataset
 ds_area = xr.open_dataset(file_area)
-
-## Sector names, consistent with linear response functions
-sectors = ['eais','wedd','amun','ross','apen']
 
 ## Create dataframe for mean ocean temperatures per sector
 df_thetao_year = pd.DataFrame(columns=sectors, index=[year])
@@ -208,13 +245,18 @@ for sector in sectors:
     with open(RF_TotalFW_file) as f:
         RF_TotalFW = np.array([float(row) for row in f])
     dfRF[sector] =  RF_TotalFW
+print(dfRF)
 
 ## Compute total freshwater forcing for the next year (dataframe with 5 values in Gt)
 # Note: file_future_forcing will store the freshwater forcing for up to 200 years in the future
 df_dFWF = FWF.freshwater_flux_anomaly_df(t,length,df_dBM,dfRF,file_future_forcing)
+# Add sum to dataframe
+df_dFWF['sum'] = df_dFWF.sum(axis=1)
+
 # Add index 'year' to dataframe
 df_dFWF.index=[year]
 df_dFWF.index.name = 'year'
+print(df_dFWF)
 
 print(f'##### Exporting freshwater forcing anomaly of year {year} to csv file ##############')
 print(output_dFWF)
@@ -230,19 +272,23 @@ elif year>year_min:
 
 
 ######################### Total freshwater forcing ##########################
-# Read baseline freshwater forcing (computed from precipitation, evaporation and runoff) from file
-#with open(file_baseline_fwf ) as f:
-#    FWF_AIS_baseline_Gt = f.read()
+#Distribute baseline according to observations df_FWF_baseline !!!! Change to picontrol PminE per region
+df_FWF_baseline =  pd.DataFrame(columns=sectors,index=['picontrol'])
+df_FWF_baseline['sum'] = [FWF_total_yearmin]
+print('Baseline freshwater forcing: ', df_FWF_baseline['sum'])
 
+for sector in sectors:
+    df_FWF_baseline[sector] = bm_calv_distribution.loc[sector]['sum']/100*df_FWF_baseline['sum']
+print(df_FWF_baseline)
 # Total change in freshwater forcing: sum over 5 regions
-sum_dFWF_Gt = df_dFWF.sum(axis=1)
+#df_FWF_baseline['sum'] = df_dFWF.sum(axis=1)
 
 # Add baseline FWF to sum of anomalies
-df_total_FWF_Gt = sum_dFWF_Gt + FWF_total_yearmin
-# Add index 'year' to dataframe
-df_total_FWF_Gt.index=[year]
-df_total_FWF_Gt.index.name = 'year'
-print('Total freshwater forcing: ', df_total_FWF_Gt)
+# Compute total FWF per region
+df_FWF_total = pd.DataFrame(columns=sectors+['sum'])
+df_FWF_total.loc[year] = df_dFWF.loc[year]+df_FWF_baseline.loc['picontrol']
+df_FWF_total.index.name = 'year'
+print('Total freshwater forcing: ', df_FWF_total['sum'])
 
 # Write total FWF to file
 print(f'##### Exporting freshwater forcing of year {year} to csv file ##############')
@@ -253,14 +299,20 @@ if year==year_min:
     if os.path.isfile(output_FWF):    
         os.remove(output_FWF)    
 
-    df_total_FWF_Gt.to_csv(output_FWF)
+    df_FWF_total.to_csv(output_FWF)
 elif year>year_min:
     # Append to existing file if it exists
-    df_total_FWF_Gt.to_csv(output_FWF, mode='a', header=not os.path.exists(output_FWF))
+    df_FWF_total.to_csv(output_FWF, mode='a', header=not os.path.exists(output_FWF))
 
 
 ##################### Distribution over ocean grid ######################
 
+# Dictionary for relating larmip regions to numbers in netcdf file
+sector_dict = {'eais': 1,
+          'wedd': 2,
+          'amun': 3,
+          'ross': 4,
+          'apen': 5}
 ##
 # Read distribution mask from file
 #with open(file_distribution_area) as f:
@@ -269,53 +321,78 @@ elif year>year_min:
 basal_melt_mask = xr.open_dataset(file_basal_melt_mask)
 calving_mask = xr.open_dataset(file_calving_mask)
 
+calving_mask = calving_mask.rename({'lon':'longitude','lat':'latitude','y':'j','x':'i'})
+basal_melt_mask = basal_melt_mask.rename({'lon':'longitude','lat':'latitude','y':'j','x':'i'})
 
-## Open areacello dataarray and compute area corresponding with  distribution mask
+
+## Open areacello and depth dataarray and compute area and volume corresponding with distribution masks
 ds_area = xr.open_dataset(file_area)
-#distribution_area = ds_area.areacello.where(distribution_mask.friver).sum('j').sum('i').values
-#print('Freshwater distribution area: ', distribution_area, 'm^2')
-
-basal_melt_area = ds_area.areacello.where(basal_melt_mask.basal_melt_mask).sum('j').sum('i').values
-calving_area = ds_area.areacello.where(calving_mask.calving_mask).sum('j').sum('i').values
-print('Basal melt area: ', basal_melt_area, 'm^2')
-print('Calving area: ', calving_area, 'm^2')
-
 ds_depth=xr.open_dataset(file_bm_depth2)-xr.open_dataset(file_bm_depth1)
-basal_melt_volume = np.nansum(ds_area.areacello.where(basal_melt_mask.basal_melt_mask).values*ds_depth.bmdepth.values)
-print('Basal melt volume: ', basal_melt_volume, 'm^3')
 
-#The distribution of this total meltwater flux between basal melt and calving is fixed using the observed mass loss by Rignot et al. 2013 
-df_FWF_calving = 0.45 * df_total_FWF_Gt
-df_FWF_basal_melt = 0.55 * df_total_FWF_Gt
+# Compute area for calving flux and volume for basal melt flux
+df_fwf_geom = pd.DataFrame(index=sectors+['sum'],columns=['calving area','basal melt area','basal melt volume'])
 
-# Convert Gt yr-1 to kg m-2 s-1
-#FWF_flux = df_total_FWF_Gt.values*kg_per_Gt/spy/float(distribution_area)
-basal_melt_flux = df_FWF_basal_melt.values*kg_per_Gt/spy/float(basal_melt_area)
-calving_flux = df_FWF_calving.values*kg_per_Gt/spy/float(calving_area)
+for sector in sectors:
+    df_fwf_geom.loc[sector,'calving_area'] = ds_area.areacello.where(calving_mask.calving_mask==sector_dict[sector]).sum('j').sum('i').values
+    df_fwf_geom.loc[sector,'basal melt area'] = ds_area.areacello.where(basal_melt_mask.basal_melt_mask==sector_dict[sector]).sum('j').sum('i').values
+    df_fwf_geom.loc[sector,'basal melt volume'] = np.nansum(ds_area.areacello.where(basal_melt_mask.basal_melt_mask==sector_dict[sector]).values*ds_depth.bmdepth.values)
+
+df_fwf_geom.loc['sum','calving area'] = ds_area.areacello.where(calving_mask.calving_mask>0).sum('j').sum('i').values
+df_fwf_geom.loc['sum','basal melt area'] = ds_area.areacello.where(basal_melt_mask.basal_melt_mask>0).sum('j').sum('i').values
+## volume: multiply with depth for each gridpoint
+df_fwf_geom.loc['sum','basal melt volume'] = np.nansum(ds_area.areacello.where(basal_melt_mask.basal_melt_mask>0).values*ds_depth.bmdepth.values) 
+print('df_fwf_geom', df_fwf_geom)
+
+#The distribution of this total meltwater flux between basal melt and calving is fixed using the observed mass loss by Rignot et al. 2013
+df_FWF_calving_source = pd.DataFrame(columns=sectors,index=[year]) #source!
+df_FWF_calving = pd.DataFrame(columns=sectors,index=[year]) #sink!
+df_FWF_basal_melt = pd.DataFrame(columns=sectors,index=[year]) #source==sink
+
+for sector in (sectors+['sum']):
+    df_FWF_calving_source[sector] = bm_calv_distribution.loc[sector]['calv']/bm_calv_distribution.loc[sector]['sum']*df_FWF_total[sector]
+    df_FWF_basal_melt[sector] = bm_calv_distribution.loc[sector]['bm']/bm_calv_distribution.loc[sector]['sum']*df_FWF_total[sector]
+
+for sector in sectors:
+    df_FWF_calving[sector]=(source_sink_calv_distribution[sector]/100*df_FWF_calving_source[sectors]).sum(axis=1)
+df_FWF_calving['sum']=df_FWF_calving_source['sum']
+
+# Compute fwf fluxes
+# Calving flux per area: convert Gt yr-1 to kg m-2 s-1 
+df_calving_flux = df_FWF_calving*kg_per_Gt/spy/df_fwf_geom['calving area']
+# BM per volume (in kg m-3 s-1)
+df_basal_melt_flux_per_volume = df_FWF_basal_melt*kg_per_Gt/spy/df_fwf_geom['basal melt volume']
 
 # Apply flux to masked region
-#FWF_distribution = FWF_flux*distribution_mask
-#FWF_distribution = FWF_distribution.rename({'friver':'freshwater_flux'})
-basal_melt_distribution = basal_melt_flux*basal_melt_mask
-calving_distribution = calving_flux*calving_mask
-
-# BM per volume (in kg m-3 s-1)
-# multiply with depth for each gridpoint, overwrite basal_melt_distribution
-basal_melt_flux_per_volume = df_FWF_basal_melt.values*kg_per_Gt/spy/float(basal_melt_volume)
-basal_melt_distribution = basal_melt_flux_per_volume*ds_depth.bmdepth.values*basal_melt_mask
-
-#The distribution of this total meltwater flux between basal melt and calving is fixed using the observed mass loss by Rignot et al. 2013 
-#FWF_calving = 0.45 * FWF_distribution
-#FWF_basal_melt = 0.55 * FWF_distribution
+# Distribution options
+if fwf_distribution=='uniform':
+    da_basal_melt_distribution = float(df_basal_melt_flux_per_volume['sum'].values)*ds_depth.bmdepth.values*(basal_melt_mask.basal_melt_mask>0)
+    da_calving_distribution = float(df_calving_flux['sum'].values)*(calving_mask.calving_mask>0)
+    #Convert dataarray to dataset
+    ds_basal_melt_distribution  = da_basal_melt_distribution.to_dataset()
+    ds_calving_distribution = da_calving_distribution.to_dataset()
+    # Rename variables for nemo
+    FWF_basal_melt = ds_basal_melt_distribution.rename({'basal_melt_mask':'sorunoff_f'})
+    FWF_calving = ds_calving_distribution.rename({'calving_mask':'socalving_f'})
+elif fwf_distribution=='larmip':
+    ds_basal_melt_distribution = xr.full_like(basal_melt_mask,np.nan)
+    ds_calving_distribution = xr.full_like(calving_mask,np.nan)
+    # Create dataset with calving distribution for each region
+    for sector in sectors:
+        ds_calving_distribution[sector] = float(df_calving_flux[sector].values)*calving_mask.calving_mask.where(calving_mask.calving_mask==sector_dict[sector])
+        ds_basal_melt_distribution[sector] = float(df_basal_melt_flux_per_volume[sector].values)*ds_depth.bmdepth.values*basal_melt_mask.basal_melt_mask.where(basal_melt_mask.basal_melt_mask==sector_dict[sector])
+    ds_calving_distribution = ds_calving_distribution.drop('calving_mask')
+    ds_basal_melt_distribution = ds_basal_melt_distribution.drop('basal_melt_mask')
+    # Replace Nans with zeros before taking the sum of all regions
+    ds_basal_melt_distribution = ds_basal_melt_distribution.where(ds_basal_melt_distribution>0,0)
+    ds_calving_distribution = ds_calving_distribution.where(ds_calving_distribution>0,0)
+    # Add all sectors (sum)
+    ds_basal_melt_distribution['sum'] = ds_basal_melt_distribution[sectors].to_array().sum("variable")
+    ds_calving_distribution['sum'] = ds_calving_distribution[sectors].to_array().sum("variable")
+    # Rename variables for nemo   
+    FWF_basal_melt = ds_basal_melt_distribution.drop(sectors).rename({'sum':'sorunoff_f'})
+    FWF_calving = ds_calving_distribution.drop(sectors).rename({'sum':'socalving_f'})
 
 ##################### Create forcing file for NEMO ######################
-
-# Rename variables for nemo
-#FWF_calving = FWF_calving.rename({'freshwater_flux':'socalving_f'})
-#FWF_basal_melt = FWF_basal_melt.rename({'freshwater_flux':'sorunoff_f'})
-
-FWF_basal_melt = basal_melt_distribution.rename({'basal_melt_mask':'sorunoff_f'})
-FWF_calving = calving_distribution.rename({'calving_mask':'socalving_f'})
 
 t_new = xr.cftime_range(str(year+1),periods=12,freq='MS')
 
@@ -331,7 +408,6 @@ FWF_calving = FWF_calving.fillna(0) #set nans to zeros
 # Merge dataarrays in one dataset
 ds_FWF = xr.merge([FWF_basal_melt, FWF_calving])
 ds_FWF = ds_FWF.assign_coords({'time_counter': t_new.values})
-#ds_FWF = ds_FWF.rename({'y':'j','x':'i','nav_lon':'longitude','nav_lat':'latitude'})
 
 # Write to file  (to be read in by EC-Earth in the next year)
 if os.path.isfile(file_forcing):    
@@ -339,36 +415,7 @@ if os.path.isfile(file_forcing):
 
 ds_FWF.to_netcdf(file_forcing, unlimited_dims=['time_counter'])
 
-# Create zshelf files based on horizontal basal melt distribution for basal melt distribution over depth
-#if year==year_min:
-#    d = 0
-#    for depth in [bm_dep1, bm_dep2]:
-#        # Find oceanic layers that sit fully within the depth bounds
-#        if d == 0:
-#            lev_ind = TS.nearest_above(ds_lev_bnds[:,0],depth) #above = deeper than
-#            depth_nemo = ds_lev_bnds[lev_ind,0].values
-#            print('Upper bound of ocean layer used for basal melt distribution: ' , depth_nemo, ' m')
-#        elif d == 1:
-#            lev_ind= TS.nearest_below(ds_lev_bnds[:,1],depth) #below = shallower than
-#            depth_nemo = ds_lev_bnds[lev_ind,1].values
-#            print('Lower bound of ocean layer used for basal melt distribution: ' , depth_nemo, ' m')
-#
-#        print('Creating zshelf ncfile')
-#        ds_bm_mask = xr.open_dataarray(file_basal_melt_mask)
 
-#        ds_zshelf = ds_bm_mask.where(ds_bm_mask > 0)
-#        ds_zshelf.name = 'bmdepth'
-#        ds_zshelf = ds_zshelf.fillna(0)
-#        df_zshelf = ds_zshelf.values
-#        df_zshelf[df_zshelf>0] = depth_nemo
-#        ds_zshelf.attrs = {'long_name':'basal melt depth', 'units':'m'}
-#        ds_zshelf = ds_zshelf.expand_dims({'time_counter': 1})
-
-#        file_bm=[file_bm_depth1, file_bm_depth2]
-#        print('for depth = '+ str(depth) +' m:')
-#        print(file_bm[d])
-#        ds_zshelf.to_netcdf(file_bm[d], unlimited_dims=['time_counter'])
-#        d += 1
 
 print("##### FINISHED FRESHWATER FORCING COMPUTATION")
 
