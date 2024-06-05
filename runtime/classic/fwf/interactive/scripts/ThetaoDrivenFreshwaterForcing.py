@@ -85,6 +85,13 @@ output_thetao_RM = f'{path_output}/OceanSectorThetao_{running_mean_period}yRM_{e
 ## Sector names, consistent with linear response functions
 sectors = ['eais','wedd','amun','ross','apen']
 
+# Basal melt sensitivities for each sector - LADDIE-derived
+dict_melt_sensitivity_laddie = {'eais': 1.01,
+                                'wedd': 1.07,
+                                'amun': 0.51,
+                                'ross': 0.32,
+                                'apen': 0.21}
+
 # Basal melt and calving contribution per sector (Rignot 2013)
 bm_calv_distribution = pd.DataFrame(columns=['calv','bm', 'sum'],index=sectors)
 bm_calv_distribution.loc['eais'] = [15.5, 15.5, 31]
@@ -200,8 +207,11 @@ elif year>year_min:
 
 print('Computing basal melt anomalies')
 ## Compute basal melt anomalies from thetao and gamma
+#Create dataframe with basal melt sensitivities
+df_melt_sensitivity=pd.DataFrame(data=dict_melt_sensitivity_laddie,index=[year])
+
 baseyear=df_thetao_baseline.index[0]
-df_dBM = BM.basal_melt_anomalies(df_thetao_baseline.loc[baseyear],df_thetao_running_mean.loc[year], gamma)
+df_dBM = BM.basal_melt_anomalies(df_thetao_baseline.loc[baseyear],df_thetao_running_mean.loc[year], df_melt_sensitivity)
 # Add index 'year' to dataframe
 df_dBM.index=[year]
 df_dBM.index.name = 'year'
@@ -333,7 +343,7 @@ ds_depth=xr.open_dataset(file_bm_depth2)-xr.open_dataset(file_bm_depth1)
 df_fwf_geom = pd.DataFrame(index=sectors+['sum'],columns=['calving area','basal melt area','basal melt volume'])
 
 for sector in sectors:
-    df_fwf_geom.loc[sector,'calving_area'] = ds_area.areacello.where(calving_mask.calving_mask==sector_dict[sector]).sum('j').sum('i').values
+    df_fwf_geom.loc[sector,'calving area'] = ds_area.areacello.where(calving_mask.calving_mask==sector_dict[sector]).sum('j').sum('i').values
     df_fwf_geom.loc[sector,'basal melt area'] = ds_area.areacello.where(basal_melt_mask.basal_melt_mask==sector_dict[sector]).sum('j').sum('i').values
     df_fwf_geom.loc[sector,'basal melt volume'] = np.nansum(ds_area.areacello.where(basal_melt_mask.basal_melt_mask==sector_dict[sector]).values*ds_depth.bmdepth.values)
 
@@ -349,8 +359,8 @@ df_FWF_calving = pd.DataFrame(columns=sectors,index=[year]) #sink!
 df_FWF_basal_melt = pd.DataFrame(columns=sectors,index=[year]) #source==sink
 
 for sector in (sectors+['sum']):
-    df_FWF_calving_source[sector] = bm_calv_distribution.loc[sector]['calv']/bm_calv_distribution.loc[sector]['sum']*df_FWF_total[sector]
-    df_FWF_basal_melt[sector] = bm_calv_distribution.loc[sector]['bm']/bm_calv_distribution.loc[sector]['sum']*df_FWF_total[sector]
+    df_FWF_calving_source[sector] = bm_calv_distribution.loc[sector,'calv']/bm_calv_distribution.loc[sector,'sum']*df_FWF_total.loc[year,sector]
+    df_FWF_basal_melt[sector] = bm_calv_distribution.loc[sector,'bm']/bm_calv_distribution.loc[sector,'sum']*df_FWF_total.loc[year,sector]
 
 for sector in sectors:
     df_FWF_calving[sector]=(source_sink_calv_distribution[sector]/100*df_FWF_calving_source[sectors]).sum(axis=1)
@@ -365,8 +375,8 @@ df_basal_melt_flux_per_volume = df_FWF_basal_melt*kg_per_Gt/spy/df_fwf_geom['bas
 # Apply flux to masked region
 # Distribution options
 if fwf_distribution=='uniform':
-    da_basal_melt_distribution = float(df_basal_melt_flux_per_volume['sum'].values)*ds_depth.bmdepth.values*(basal_melt_mask.basal_melt_mask>0)
-    da_calving_distribution = float(df_calving_flux['sum'].values)*(calving_mask.calving_mask>0)
+    da_basal_melt_distribution = float(df_basal_melt_flux_per_volume.loc[year,'sum'])*ds_depth.bmdepth.values*(basal_melt_mask.basal_melt_mask>0)
+    da_calving_distribution = float(df_calving_flux.loc[year,'sum'])*(calving_mask.calving_mask>0)
     #Convert dataarray to dataset
     ds_basal_melt_distribution  = da_basal_melt_distribution.to_dataset()
     ds_calving_distribution = da_calving_distribution.to_dataset()
@@ -378,10 +388,10 @@ elif fwf_distribution=='larmip':
     ds_calving_distribution = xr.full_like(calving_mask,np.nan)
     # Create dataset with calving distribution for each region
     for sector in sectors:
-        ds_calving_distribution[sector] = float(df_calving_flux[sector].values)*calving_mask.calving_mask.where(calving_mask.calving_mask==sector_dict[sector])
-        ds_basal_melt_distribution[sector] = float(df_basal_melt_flux_per_volume[sector].values)*ds_depth.bmdepth.values*basal_melt_mask.basal_melt_mask.where(basal_melt_mask.basal_melt_mask==sector_dict[sector])
-    ds_calving_distribution = ds_calving_distribution.drop('calving_mask')
-    ds_basal_melt_distribution = ds_basal_melt_distribution.drop('basal_melt_mask')
+        ds_calving_distribution[sector] = float(df_calving_flux.loc[year,sector])*calving_mask.calving_mask.where(calving_mask.calving_mask==sector_dict[sector])
+        ds_basal_melt_distribution[sector] = float(df_basal_melt_flux_per_volume.loc[year,sector])*ds_depth.bmdepth.values*basal_melt_mask.basal_melt_mask.where(basal_melt_mask.basal_melt_mask==sector_dict[sector])
+    ds_calving_distribution = ds_calving_distribution.drop_vars('calving_mask')
+    ds_basal_melt_distribution = ds_basal_melt_distribution.drop_vars('basal_melt_mask')
     # Replace Nans with zeros before taking the sum of all regions
     ds_basal_melt_distribution = ds_basal_melt_distribution.where(ds_basal_melt_distribution>0,0)
     ds_calving_distribution = ds_calving_distribution.where(ds_calving_distribution>0,0)
@@ -389,8 +399,8 @@ elif fwf_distribution=='larmip':
     ds_basal_melt_distribution['sum'] = ds_basal_melt_distribution[sectors].to_array().sum("variable")
     ds_calving_distribution['sum'] = ds_calving_distribution[sectors].to_array().sum("variable")
     # Rename variables for nemo   
-    FWF_basal_melt = ds_basal_melt_distribution.drop(sectors).rename({'sum':'sorunoff_f'})
-    FWF_calving = ds_calving_distribution.drop(sectors).rename({'sum':'socalving_f'})
+    FWF_basal_melt = ds_basal_melt_distribution.drop_vars(sectors).rename({'sum':'sorunoff_f'})
+    FWF_calving = ds_calving_distribution.drop_vars(sectors).rename({'sum':'socalving_f'})
 
 ##################### Create forcing file for NEMO ######################
 

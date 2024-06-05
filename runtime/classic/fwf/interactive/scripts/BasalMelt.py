@@ -22,7 +22,7 @@ def basal_melt_sensitivity(gamma):
 
     return ms
 
-def quadratic_basal_melt(thetao, gamma):
+def quadratic_basal_melt(thetao, melt_sensitivity):
     '''
     Compute basal melt based on quadratic parameterization with 
     chosen gamma, ocean temperatures and freezing point temperatures
@@ -34,7 +34,7 @@ def quadratic_basal_melt(thetao, gamma):
     Returns:   
         Basal melt
     '''
-    melt_sensitivity = basal_melt_sensitivity(gamma)
+    #melt_sensitivity = basal_melt_sensitivity(gamma)
     print(f'Using basal melt sensitivity: {melt_sensitivity} m yr-1 K-2')
 
     # Compute basal melt timeseries
@@ -42,14 +42,14 @@ def quadratic_basal_melt(thetao, gamma):
 
     return BasalMelt
 
-def basal_melt_anomalies(thetao_ref,thetao, gamma):
+def basal_melt_anomalies(thetao_ref,thetao, melt_sens):
     ''' 
     Compute basal melt anomalies for ocean temperature thetao compared to baseline period
     
     Args:
         thetao_ref: ocean temperature used as baseline for anomaly computation
         thetao: ocean temperature
-        gamma: calibration parameter
+        melt_sens: calibration parameter
 
     
     Returns:
@@ -57,16 +57,17 @@ def basal_melt_anomalies(thetao_ref,thetao, gamma):
     '''
 
     # Quadratic melt baseline (negative if To < Tf)
-    BasalMelt_base = quadratic_basal_melt(thetao_ref, gamma)
+    BasalMelt_base = quadratic_basal_melt(thetao_ref, melt_sens)
 
     # Compute basal melt for thetao
-    BasalMelt = quadratic_basal_melt(thetao, gamma)
+    BasalMelt = quadratic_basal_melt(thetao, melt_sens)
     
     # Compute basal melt anomalies
     deltaBasalMelt = BasalMelt - BasalMelt_base
-    
+    print(deltaBasalMelt)
+
     # Convert to dataframe
-    df_deltaBasalMelt = deltaBasalMelt.to_frame().transpose()
+    #df_deltaBasalMelt = deltaBasalMelt.to_frame().transpose()
 
     # return: basal melt anomalies compared to historical reference period
-    return(df_deltaBasalMelt)
+    return(deltaBasalMelt)

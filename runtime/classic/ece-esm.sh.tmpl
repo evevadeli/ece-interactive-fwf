@@ -961,23 +961,24 @@ do
             echo "fwf=$fwf: complex forcing - linked modified runoff_maps.nc"
             echo "FWF option 2; not implemented yet"
         elif [[ $fwf -eq 4 || $fwf -eq 5 ]]; then
-            ln -fs ${ini_data_dir}/nemo/fwf/runoff_maps_fwf_AIS.nc runoff_maps.nc
+            ini_data_dir_fwf=/ec/res4/hpcperm/nk0j/ece3data_fwf
+            ln -fs ${ini_data_dir_fwf}/nemo/fwf/runoff_maps_fwf_AIS.nc runoff_maps.nc
             info "fwf=$fwf: linear response function forcing - linked modified runoff_maps.nc with AIS region removed"
             #forcing_dir=${start_dir}/fwf/interactive/forcing_files/${exp_name}
-            ln -fs ${ini_data_dir}/nemo/fwf/interactive/input/basal_melt_depth1.nc basal_melt_depth1.nc
-            ln -fs ${ini_data_dir}/nemo/fwf/interactive/input/basal_melt_depth2.nc basal_melt_depth2.nc
+            ln -fs ${ini_data_dir_fwf}/nemo/fwf/interactive/input/basal_melt_depth1.nc basal_melt_depth1.nc
+            ln -fs ${ini_data_dir_fwf}/nemo/fwf/interactive/input/basal_melt_depth2.nc basal_melt_depth2.nc
             info "linked basal_melt_depth.nc files; depth range for basal melt distribution"
                     
             mkdir -p ${fw_forcing_dir}
             
             # Initial FWF
-            cp ${ini_data_dir}/nemo/fwf/interactive/input/FWF_LRF_y${leg_start_date_yyyy}.nc ${fw_forcing_dir}
+            cp ${ini_data_dir_fwf}/nemo/fwf/interactive/input/larmip/FWF_LRF_y${leg_start_date_yyyy}.nc ${fw_forcing_dir}
             
             # Need a FWF file for the year before the start date
             ln -s ${fw_forcing_dir}/FWF_LRF_y${leg_start_date_yyyy}.nc freshwater_forcing_y$((${leg_start_date_yyyy}-1)).nc
             
             # Thetao climatology
-            cp ${ini_data_dir}/nemo/fwf/interactive/input/OceanSectorThetao_piControl.csv ${fw_forcing_dir}
+            cp ${ini_data_dir_fwf}/nemo/fwf/interactive/input/OceanSectorThetao_piControl.csv ${fw_forcing_dir}
             fi
         else
             error "fwf ($fwf) supported options are 0, 4 and 5" 
@@ -1970,7 +1971,7 @@ do
         # Compute freshwater forcing for next year
         time python3 ${start_dir}/fwf/interactive/scripts/ThetaoDrivenFreshwaterForcing.py \
             ${run_start_date_yyyy} ${run_end_date_yyyy} \
-            ${leg_start_date_yyyy} $(printf %03d $((leg_number))) ${exp_name} ${ini_data_dir} ${run_dir}
+            ${leg_start_date_yyyy} $(printf %03d $((leg_number))) ${exp_name} ${ini_data_dir_fwf} ${run_dir}
 
         echo "Computed freshwater forcing for year $((${leg_start_date_yyyy}+1))"
 
@@ -1989,7 +1990,7 @@ do
         info "Analyze results for prescribed freshwater forcing"
         python3 ${start_dir}/fwf/interactive/scripts/PrescribedFreshwaterForcing.py \
              ${run_start_date_yyyy} ${run_end_date_yyyy} \
-             ${leg_start_date_yyyy} $(printf %03d $((leg_number))) ${exp_name} ${ini_data_dir} ${run_dir}
+             ${leg_start_date_yyyy} $(printf %03d $((leg_number))) ${exp_name} ${ini_data_dir_fwf} ${run_dir}
         echo "Thetao analysis completed for year $((${leg_start_date_yyyy}+1))"
     fi
 

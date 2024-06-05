@@ -51,7 +51,7 @@
         <Parameter name="EXP_NAME">
             <Description>Experiment name (4 letters)</Description>
             <Type>STRING</Type>
-            <Value>tes4</Value>
+            <Value>fwf1</Value>
         </Parameter>
 
         <Parameter name="RUN_START_DATE">
@@ -63,7 +63,7 @@
         <Parameter name="RUN_END_DATE">
             <Description>End date of the simulation. Use any reasonable syntax.</Description>
             <Type>STRING</Type>
-            <Value>${run_start_date} + 250 years</Value>
+            <Value>${run_start_date} + 100 years</Value>
         </Parameter>
 
         <Parameter name="FORCE_RUN_FROM_SCRATCH">
@@ -87,7 +87,7 @@
         <Parameter name="OUTPUT_CONTROL_FILES_DIR">
             <Description>The path to the IFS ppt and NEMO file_def file dir</Description>
             <Type>PATH</Type>
-            <Value>ctrl</Value>
+            <Value>ctrl/output-control-files/cmip6/CMIP/EC-EARTH-AOGCM/cmip6-experiment-CMIP-historical/</Value>
         </Parameter>
 
     </Model>
@@ -173,13 +173,13 @@
         <Parameter name="CMIP_FIXYEAR">
             <Description>Fix CMIP5/CMIP6 forcings at the indicated year (or 0 to ignore for transient runs)</Description>
             <Type>INTEGER</Type>
-            <Value>0</Value>
+            <Value>1850</Value>
         </Parameter>
 
         <Parameter name="CMIP_FIXYEAR_CH4">
             <Description>Fix CMIP5/CMIP6 CH4 mixing ratios at the indicated year (or 0 to ignore for transient runs)</Description>
             <Type>INTEGER</Type>
-            <Value>0</Value>
+            <Value>1850</Value>
         </Parameter>
 
     </Model>
@@ -199,9 +199,9 @@
         </Parameter>
 
         <Parameter name="FWF">
-            <Description>Freshwater forcing option</Description>
+            <Description>Freshwater forcing option (0: off, 4: on-transient, 5: on-constant)</Description>
             <Type>INTEGER</Type>
-            <Value>4</Value>
+            <Value>5</Value>
         </Parameter>
         
     </Model>

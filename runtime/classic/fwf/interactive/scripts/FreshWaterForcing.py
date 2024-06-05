@@ -31,9 +31,6 @@ def freshwater_flux_anomaly_df(t, length, BM, RF, file_future_fwf):
         except FileNotFoundError:
             print('Initialise empty dataframe dfFWF')
             dfFWF = pd.DataFrame(0,index=range(length),columns=BM.columns) # creaty empty dataframe
-        # Initialise dfFWF
-        print('Initialise empty dataframe dfFWF')
-        dfFWF = pd.DataFrame(0,index=range(length),columns=BM.columns) # creaty empty dataframe
 
     elif t > 0:
         dfFWF = pd.read_csv(file_future_fwf, index_col=0)
@@ -55,5 +52,7 @@ def freshwater_flux_anomaly_df(t, length, BM, RF, file_future_fwf):
     print(f'Saved future forcing to {file_future_fwf}')
     # Compute differences: annual forcing
     dfFWF_diff = dfFWF.diff()
+    print('dfFWF_diff')
+    print(pd.DataFrame(dfFWF_diff.iloc[t+1]).T)
 
-    return (pd.DataFrame(dfFWF_diff.iloc[t]).T)
+    return (pd.DataFrame(dfFWF_diff.iloc[t+1]).T)
