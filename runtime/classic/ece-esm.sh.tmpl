@@ -1157,7 +1157,10 @@ do
         #NOT-AVAILABLE-YET     ln -fs ${start_dir}/fwf/runoff_maps_fwf.nc runoff_maps.nc
         #NOT-AVAILABLE-YET     info "fwf=$fwf: complex forcing - linked modified runoff_maps.nc"
         #NOT-AVAILABLE-YET     error "FWF option 2; not implemented yet"
-            
+
+        # Where yearly forcing files are written [DEFINED BEFORE, REQUIRED FOR RESTARTING, MOVE OUTSIDE LOOP]
+        fw_forcing_dir=${run_dir}/fwf/interactive/forcing_files
+
         if [ $fwf -eq 4 ]
         then
             ln -s ${fw_forcing_dir}/FWF_LRF_y${leg_start_date_yyyy}.nc freshwater_forcing_y${leg_start_date_yyyy}.nc
@@ -1966,6 +1969,9 @@ do
     #sbatch -d afterok:$jobid pywr 
     info "Start freshwater forcing computation"
     module load python3
+
+    # [REQUIRED FOR RESTARTS, MOVE TO OTHER PLACE]
+    ini_data_dir_fwf=/ec/res4/hpcperm/nk0j/ece3data_fwf
 
      if [ $fwf -eq 4 ]; then
         # Compute freshwater forcing for next year
