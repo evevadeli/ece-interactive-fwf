@@ -11,6 +11,7 @@ import sys
 import ThetaoSectors as TS
 import BasalMelt as BM
 import FreshWaterForcing as FWF
+import DataVariablesParameters as dvp
 from config import gamma, ism, bm, fwf_distribution, running_mean_period, FWF_total_yearmin
 
 
@@ -62,6 +63,7 @@ if not os.path.isfile(file_baseline_thetao):
     file_baseline_thetao = f'{path_input}/OceanSectorThetao_piControl.csv'
 print('Use baseline_thetao from '+file_baseline_thetao)
 
+file_larmip_ocean_mask = f'{ini_data_dir}/masks/LARMIP_ocean_regions_ORCA1.nc'
 file_basal_melt_mask = f'{path_input}/basal_melt_mask_LARMIP_ORCA1.nc'
 file_calving_mask = f'{path_input}/calving_mask_LARMIP_ORCA1.nc'
 
@@ -84,6 +86,13 @@ output_thetao_RM = f'{path_output}/OceanSectorThetao_{running_mean_period}yRM_{e
 ##################### Basal melt and calving distribution##################################
 ## Sector names, consistent with linear response functions
 sectors = ['eais','wedd','amun','ross','apen']
+
+# Dictionary for relating larmip regions to numbers in netcdf file
+sector_dict = {'eais': 1,
+               'wedd': 2,
+               'amun': 3,
+               'ross': 4,
+               'apen': 5}
 
 # Basal melt sensitivities for each sector - LADDIE-derived
 dict_melt_sensitivity_laddie = {'eais': 1.01,
@@ -147,15 +156,25 @@ ds_area = xr.open_dataset(file_area)
 df_thetao_year = pd.DataFrame(columns=sectors, index=[year])
 df_thetao_year.index.name = 'year'
 
+ds_larmip_mask = xr.open_dataset(file_larmip_ocean_mask)
+ds_larmip_mask = ds_larmip_mask.rename({'y':'j','x':'i','lon':'longitude','lat':'latitude'})
+
 ## Loop over oceanic sectors
 for sector in sectors:
 
     # Compute area weighted mean temperature
-    print('Computing area weighted mean of thetao for ', sector, 'sector')           
-    thetao_area_weighted_mean = TS.area_weighted_mean(ds_thetao_year,ds_area,sector)
+    print('Computing area weighted mean of thetao for ', sector, 'sector')        
+
+    # Select mask for specific ocean sector
+    #mask_sector = dvp.sel_mask(ds_area,sector)
+    mask_sector = (ds_larmip_mask.regions==sector_dict[sector]) #Based on nc file
+
+    thetao_area_weighted_mean = TS.area_weighted_mean(ds_thetao_year,ds_area,mask_sector)
+
+    depth_bnds_sector = dvp.sel_depth_bnds(sector) 
 
     # Compute layer weighted mean of area weighted mean --> volume weighted mean
-    thetao_volume_weighted_mean = TS.lev_weighted_mean(thetao_area_weighted_mean,ds_lev_bnds,sector)
+    thetao_volume_weighted_mean = TS.lev_weighted_mean(thetao_area_weighted_mean,ds_lev_bnds,depth_bnds_sector)
 
     # Create dataframe from dataarray
     print('Fill dataframe for sector ', sector)
@@ -317,12 +336,6 @@ elif year>year_min:
 
 ##################### Distribution over ocean grid ######################
 
-# Dictionary for relating larmip regions to numbers in netcdf file
-sector_dict = {'eais': 1,
-          'wedd': 2,
-          'amun': 3,
-          'ross': 4,
-          'apen': 5}
 ##
 # Read distribution mask from file
 #with open(file_distribution_area) as f:

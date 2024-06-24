@@ -6,21 +6,18 @@ import DataVariablesParameters as dvp
 
 ###############################################################################
 
-def area_weighted_mean(ds_var,ds_area,sector):
+def area_weighted_mean(ds_var,ds_area,mask_sector):
     '''
     Compute area weighted mean oceanic temperature over specific oceanic sector
     
     Args:
         ds_var: dataarray with variable
         ds_area: dataarray with areacello
-        sector: ocean sector name
+        mask_sector: mask for sector
 
     Returns:
         Area weighted mean oceanic temperature over specific oceanic sector
     '''
-
-    # Select mask for specific ocean sector
-    mask_sector = dvp.sel_mask(ds_area,sector)
 
     # Create area_weights     
     area_weights = ds_area.areacello
@@ -116,7 +113,7 @@ def nearest_below(my_array, target):
     # Returns the index of the minimum value
     return masked_diff.argmin()
 
-def lev_weighted_mean(ds_var,ds_lev_bnds,sector):
+def lev_weighted_mean(ds_var,ds_lev_bnds,depth_bnds_sector):
     '''
     Compute volume weighted mean oceanic temperature over specific oceanic
     sector and specific depth layers (centered around ice shelf depth)
@@ -133,7 +130,7 @@ def lev_weighted_mean(ds_var,ds_lev_bnds,sector):
     '''
    
     # Select depth bounds of sector
-    depth_bnds_sector = dvp.sel_depth_bnds(sector)     
+    #depth_bnds_sector = dvp.sel_depth_bnds(sector) #move out of function   
     depth_top = depth_bnds_sector[0]
     depth_bottom = depth_bnds_sector[1]
     #print(depth_bnds_sector)
