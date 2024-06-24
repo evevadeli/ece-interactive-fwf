@@ -29,6 +29,10 @@ source ./librunscript.sh
 
 config="ifs nemo lim3 rnfmapper xios:detached oasis"
 
+# FWF: path to initial conditions and restarts (hardcoded)
+ini_data_dir_fwf=/ec/res4/hpcperm/nk0j/ece3data_fwf
+rstdir_fwf=/ec/res4/hpcperm/nk0j/restarts-ecearth3/fwf/fwf1/101
+
 # minimum sanity
 has_config amip nemo && error "Cannot have both nemo and amip in config!!"
 ! has_config ifs && error "The ESM script requires ifs in config"
@@ -961,7 +965,7 @@ do
             echo "fwf=$fwf: complex forcing - linked modified runoff_maps.nc"
             echo "FWF option 2; not implemented yet"
         elif [[ $fwf -eq 4 || $fwf -eq 5 ]]; then
-            ini_data_dir_fwf=/ec/res4/hpcperm/nk0j/ece3data_fwf
+            #ini_data_dir_fwf=/ec/res4/hpcperm/nk0j/ece3data_fwf #HARDCODED
             ln -fs ${ini_data_dir_fwf}/nemo/fwf/runoff_maps_fwf_AIS.nc runoff_maps.nc
             info "fwf=$fwf: linear response function forcing - linked modified runoff_maps.nc with AIS region removed"
             #forcing_dir=${start_dir}/fwf/interactive/forcing_files/${exp_name}
@@ -977,8 +981,14 @@ do
             # Need a FWF file for the year before the start date
             ln -s ${fw_forcing_dir}/FWF_LRF_y${leg_start_date_yyyy}.nc freshwater_forcing_y$((${leg_start_date_yyyy}-1)).nc
             
-            # Thetao climatology
+            # Thetao climatology (replace for new piControl)
             cp ${ini_data_dir_fwf}/nemo/fwf/interactive/input/OceanSectorThetao_piControl.csv ${fw_forcing_dir}
+
+            # RF and Thetao lastRM (use when restarting from a fwf=4 experiment)
+		    #cp ${rstdir_fwf}/OceanSectorThetao_lastRM.csv $fw_forcing_dir
+            #if [ $fwf -eq 4 ]; then
+                #cp ${rstdir_fwf}/CumulativeFreshwaterForcingAnomaly_*_Future.csv $fw_forcing_dir/CumulativeFreshwaterForcingAnomaly_${exp_name}_Future.csv
+            #fi
             fi
         else
             error "fwf ($fwf) supported options are 0, 4 and 5" 
@@ -1970,8 +1980,8 @@ do
     info "Start freshwater forcing computation"
     module load python3
 
-    # [REQUIRED FOR RESTARTS, MOVE TO OTHER PLACE]
-    ini_data_dir_fwf=/ec/res4/hpcperm/nk0j/ece3data_fwf
+    # HARDCODED[REQUIRED FOR RESTARTS, MOVE TO OTHER PLACE]
+    #ini_data_dir_fwf=/ec/res4/hpcperm/nk0j/ece3data_fwf
 
      if [ $fwf -eq 4 ]; then
         # Compute freshwater forcing for next year

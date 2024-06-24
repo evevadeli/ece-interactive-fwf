@@ -24,7 +24,7 @@ set -e
 #ACCOUNT=spnltune
 #ACCOUNT=spnldrij
 #MYCONFIG="ifs amip tm5:chem,o3,ch4,aero oasis"
-MYCONFIG="ifs nemo:start_from_restart lim3 rnfmapper xios:detached oasis"
+MYCONFIG="ifs nemo:start_from_restart lim3 rnfmapper xios:detached oasis save_ic:end_leg"
 
 # -- Possible configurations -- (everything possible except nemo standalone)
 #
@@ -166,8 +166,8 @@ sed "s|^config=.*|config=\"${MYCONFIG}\"|" <ece-esm.sh >ece-${expn}.sh
 chmod 744 ./ece-${expn}.sh
 
 # ----- Specify links to restart files (member-01 cmip6 ensemble) ---------
-if [ $fwf -eq 4 ] ; then
-    echo "chainging IFS climatology files"
+if  [[ $fwf -eq 4 || $fwf -eq 5 ]] ; then
+    echo "changing IFS climatology files"
     rst_ic_dir="/ec/res4/hpcperm/nm6/ece3data/prev_exp/t264/member-01"
 
     echo "changing links to IFS IC files"
