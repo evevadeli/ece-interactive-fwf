@@ -9,6 +9,7 @@ import numpy as np
 import sys
 
 import ThetaoSectors as TS
+import DataVariablesParameters as dvp
 from config import running_mean_period
 
 print('Number of arguments:', len(sys.argv), 'arguments.')
@@ -30,6 +31,7 @@ path_output = f'{run_dir}/fwf/interactive/forcing_files/' #Create other path (sc
 
 ## Input data
 file_area = f'{path_input}/areacello_Ofx_EC-Earth3_historical_r1i1p1f1_gn.nc'
+file_larmip_ocean_mask = f'{ini_data_dir}/masks/LARMIP_ocean_regions_ORCA1.nc'
 file_basal_melt_mask = f'{path_input}/basal_melt_mask_ORCA1_ocean.nc'
 file_calving_mask = f'{path_input}/calving_mask_ORCA1_ocean.nc'
 
@@ -69,19 +71,35 @@ ds_area = xr.open_dataset(file_area)
 ## Sector names, consistent with linear response functions
 sectors = ['eais','wedd','amun','ross','apen']
 
+# Dictionary for relating larmip regions to numbers in netcdf file
+sector_dict = {'eais': 1,
+               'wedd': 2,
+               'amun': 3,
+               'ross': 4,
+               'apen': 5}
+
 ## Create dataframe for mean ocean temperatures per sector
 df_thetao_year = pd.DataFrame(columns=sectors, index=[year])
 df_thetao_year.index.name = 'year'
 
+# Open Larmip mask
+ds_larmip_mask = xr.open_dataset(file_larmip_ocean_mask)
+ds_larmip_mask = ds_larmip_mask.rename({'y':'j','x':'i','lon':'longitude','lat':'latitude'})
+
 ## Loop over oceanic sectors
 for sector in sectors:
+    # Select mask for specific ocean sector
+    #mask_sector = dvp.sel_mask(ds_area,sector)
+    mask_sector = (ds_larmip_mask.regions==sector_dict[sector]) #Based on nc file
 
     # Compute area weighted mean temperature
     print('Computing area weighted mean of thetao for ', sector, 'sector')           
-    thetao_area_weighted_mean = TS.area_weighted_mean(ds_thetao_year,ds_area,sector)
+    thetao_area_weighted_mean = TS.area_weighted_mean(ds_thetao_year,ds_area,mask_sector)
+
+    depth_bnds_sector = dvp.sel_depth_bnds(sector) 
 
     # Compute layer weighted mean of area weighted mean --> volume weighted mean
-    thetao_volume_weighted_mean = TS.lev_weighted_mean(thetao_area_weighted_mean,ds_lev_bnds,sector)
+    thetao_volume_weighted_mean = TS.lev_weighted_mean(thetao_area_weighted_mean,ds_lev_bnds,depth_bnds_sector)
 
     # Create dataframe from dataarray
     print('Fill dataframe for sector ', sector)
