@@ -89,9 +89,9 @@ sectors = ['eais','wedd','amun','ross','apen']
 
 # Dictionary for relating larmip regions to numbers in netcdf file
 sector_dict = {'eais': 1,
-               'wedd': 2,
+               'ross': 2,
                'amun': 3,
-               'ross': 4,
+               'wedd': 4,
                'apen': 5}
 
 # Basal melt sensitivities for each sector - LADDIE-derived
