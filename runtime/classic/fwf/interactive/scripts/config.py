@@ -1,14 +1,14 @@
 """configuration constants"""
 
 ## -------- Basal melt information -------------------------
-gamma = 0.15 * 0.65      #Basal melt calibration parameter based on sea level response function: 
+#gamma = 0.15 * 0.65      #Basal melt calibration parameter based on sea level response function: 
                          #Ice-sheet model specific
                          #Amundsen Sea calibration - EC-Earth3 IMAU (Van der Linden et al, 2023, The Cryosphere); 
                          #reduced by 35% to account for freshwater feedback (Lambert et al., manuscript)
 
 # Depths between which basal melt is distributed [in m] 
-bm_dep1 = 200            #shallowest depth, ice front draft (code searches closest depth level bound below this depth)
-bm_dep2 = 700            #deepest depth, grounding line or seabed below ice front (code searches closest depth level bound above this depth)
+#bm_dep1 = 200            #shallowest depth, ice front draft (code searches closest depth level bound below this depth)
+#bm_dep2 = 700            #deepest depth, grounding line or seabed below ice front (code searches closest depth level bound above this depth)
 
 # Areas over which basal melt and calving are distributed
 fwf_distribution = 'larmip' #options: uniform (over all regions > 0) or 'larmip' (associated with LARMIP regions)

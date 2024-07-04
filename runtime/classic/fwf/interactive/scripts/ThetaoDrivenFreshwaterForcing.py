@@ -12,7 +12,7 @@ import ThetaoSectors as TS
 import BasalMelt as BM
 import FreshWaterForcing as FWF
 import DataVariablesParameters as dvp
-from config import gamma, ism, bm, fwf_distribution, running_mean_period, FWF_total_yearmin
+from config import ism, bm, fwf_distribution, running_mean_period, FWF_total_yearmin
 
 
 print('Number of arguments:', len(sys.argv), 'arguments.')
