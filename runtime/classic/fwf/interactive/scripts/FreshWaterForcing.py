@@ -52,10 +52,11 @@ def freshwater_flux_anomaly_df(t, length, BM, RF, file_future_fwf):
     print(f'Saved future forcing to {file_future_fwf}')
     # Compute differences: annual forcing
     if t==0:
-        dfFWF_diff =dfFWF[t]
+        dfFWF_diff = dfFWF.iloc[t]
     elif t > 0:
-        dfFWF_diff = dfFWF.diff()
+        dfFWF_diff = dfFWF.diff().iloc[t]
     print('dfFWF_diff')
-    print(pd.DataFrame(dfFWF_diff.iloc[t]).T)
-
-    return (pd.DataFrame(dfFWF_diff.iloc[t]).T)
+    #print(pd.DataFrame(dfFWF_diff.iloc[t]).T)
+    print(pd.DataFrame(dfFWF_diff).T)
+    #return (pd.DataFrame(dfFWF_diff.iloc[t]).T)
+    return (pd.DataFrame(dfFWF_diff).T)
