@@ -16,8 +16,8 @@ fwf_distribution = 'larmip' #options: uniform (over all regions > 0) or 'larmip'
 ## --------- Linear response functions information ----------
 bm = '08'                #basal melt forcing to create linear response functions
 ism = 'IMAU_VUB'         #ice sheet model
-running_mean_period = 5 #interval over which running mean ocean temperatures are computed in years
+#running_mean_period = 5 #interval over which running mean ocean temperatures are computed in years
 
 ## --------- Initial conditions -----------------------------
 ## Total basal melt + calving (P-E) in piControl simulation
-FWF_total_yearmin = 3315 #3438 Gt/yr for 1971-2000 #Apply average value from (new) piControl: 3315 Gt/yr
+FWF_total_yearmin = 3315#4.076625574307109218e+03 #3438 Gt/yr for 1971-2000 #Apply average value from (new) piControl: 3315 Gt/yr

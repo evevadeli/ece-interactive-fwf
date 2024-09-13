@@ -12,7 +12,7 @@ import ThetaoSectors as TS
 import BasalMelt as BM
 import FreshWaterForcing as FWF
 import DataVariablesParameters as dvp
-from config import ism, bm, fwf_distribution, running_mean_period, FWF_total_yearmin
+from config import ism, bm, fwf_distribution, FWF_total_yearmin #running_mean_period, 
 
 
 print('Number of arguments:', len(sys.argv), 'arguments.')
@@ -81,7 +81,9 @@ output_thetao =f'{path_output}/OceanSectorThetao_{exp_name}.csv'
 output_BM =f'{path_output}/BasalMeltAnomaly_{exp_name}.csv'
 output_dFWF =f'{path_output}/FreshwaterForcingAnomaly_{exp_name}.csv'
 output_FWF =f'{path_output}/TotalFreshwaterForcing_{exp_name}.csv'
-output_thetao_RM = f'{path_output}/OceanSectorThetao_{running_mean_period}yRM_{exp_name}.csv'
+output_basal_melt_FWF =f'{path_output}/BasalMeltFreshwaterForcing_{exp_name}.csv'
+output_calving_FWF =f'{path_output}/CalvingFreshwaterForcing_{exp_name}.csv'
+#output_thetao_RM = f'{path_output}/OceanSectorThetao_{running_mean_period}yRM_{exp_name}.csv'
 
 ##################### Basal melt and calving distribution##################################
 ## Sector names, consistent with linear response functions
@@ -95,11 +97,11 @@ sector_dict = {'eais': 1,
                'apen': 5}
 
 # Basal melt sensitivities for each sector - LADDIE-derived
-dict_melt_sensitivity_laddie = {'eais': 1.01,
-                                'wedd': 1.07,
-                                'amun': 0.51,
-                                'ross': 0.32,
-                                'apen': 0.21}
+dict_melt_sensitivity_laddie = {'eais': 1.19, #(Drygalski - Fimbul/Jelbart/Atka/Ekstrom)
+                                'wedd': 0.96, #(Quar - Larsen E)
+                                'amun': 0.43, #(Wilkins - Nickerson)
+                                'ross': 0.33, #(Sulzberger - Ross)
+                                'apen': 0.18} #(Larsen C/D - George VI/Stange)
 
 # Basal melt and calving contribution per sector (Rignot 2013)
 bm_calv_distribution = pd.DataFrame(columns=['calv','bm', 'sum'],index=sectors)
@@ -202,25 +204,25 @@ df_thetao_all = pd.read_csv(output_thetao)
 df_thetao_baseline = pd.read_csv(file_baseline_thetao,index_col=0)
 
 ## Read last running mean if file exists, otherwise use baseline
-try:
-    df_thetao_lastrm = pd.read_csv(f'{path_output}/OceanSectorThetao_lastRM.csv')
-    print('Use lastRM from OceanSectorThetao_lastRM')
-except FileNotFoundError:
-    df_thetao_lastrm = df_thetao_baseline
-    print('Use lastRM from OceanSectorThetao_piControl')
+#try:
+#    df_thetao_lastrm = pd.read_csv(f'{path_output}/OceanSectorThetao_lastRM.csv')
+#    print('Use lastRM from OceanSectorThetao_lastRM')
+#except FileNotFoundError:
+#    df_thetao_lastrm = df_thetao_baseline
+#    print('Use lastRM from OceanSectorThetao_piControl')
 
 # Compute thetao running mean
-df_thetao_running_mean = TS.running_mean_backward(df_thetao_all, df_thetao_lastrm, year, year_min, running_mean_period)
+#df_thetao_running_mean = TS.running_mean_backward(df_thetao_all, df_thetao_lastrm, year, year_min, running_mean_period)
 
 # Write output to file
-if year==year_min:
-    # Create output file for the first year
-    if os.path.isfile(output_thetao_RM):    
-        os.remove(output_thetao_RM)    
-
-    df_thetao_running_mean.to_csv(output_thetao_RM)
-elif year>year_min:
-    df_thetao_running_mean.to_csv(output_thetao_RM, mode='a', header=not os.path.exists(output_thetao_RM))
+#if year==year_min:
+#    # Create output file for the first year
+#    if os.path.isfile(output_thetao_RM):    
+#        os.remove(output_thetao_RM)    
+#
+#    df_thetao_running_mean.to_csv(output_thetao_RM)
+#elif year>year_min:
+#    df_thetao_running_mean.to_csv(output_thetao_RM, mode='a', header=not os.path.exists(output_thetao_RM))
 
 #################### Basal Melt Computation ############################
 
@@ -230,7 +232,8 @@ print('Computing basal melt anomalies')
 df_melt_sensitivity=pd.DataFrame(data=dict_melt_sensitivity_laddie,index=[year])
 
 baseyear=df_thetao_baseline.index[0]
-df_dBM = BM.basal_melt_anomalies(df_thetao_baseline.loc[baseyear],df_thetao_running_mean.loc[year], df_melt_sensitivity)
+#df_dBM = BM.basal_melt_anomalies(df_thetao_baseline.loc[baseyear],df_thetao_running_mean.loc[year], df_melt_sensitivity)
+df_dBM = BM.basal_melt_anomalies(df_thetao_baseline.loc[baseyear],df_thetao_year.loc[year], df_melt_sensitivity)
 # Add index 'year' to dataframe
 df_dBM.index=[year]
 df_dBM.index.name = 'year'
@@ -334,7 +337,7 @@ elif year>year_min:
     df_FWF_total.to_csv(output_FWF, mode='a', header=not os.path.exists(output_FWF))
 
 
-##################### Distribution over ocean grid ######################
+##################### Distribution between calving and basal melt ######################
 
 ##
 # Read distribution mask from file
@@ -379,6 +382,33 @@ for sector in sectors:
     df_FWF_calving[sector]=(source_sink_calv_distribution[sector]/100*df_FWF_calving_source[sectors]).sum(axis=1)
 df_FWF_calving['sum']=df_FWF_calving_source['sum']
 
+
+# Write basal melt and calving FWF to file
+print(f'##### Exporting freshwater forcing of year {year} to csv file ##############')
+print(output_basal_melt_FWF, output_calving_FWF)
+
+if year==year_min:
+    # Create output file for the first year
+    if os.path.isfile(output_basal_melt_FWF):    
+        os.remove(output_basal_melt_FWF)    
+
+    df_FWF_basal_melt.to_csv(output_basal_melt_FWF)
+elif year>year_min:
+    # Append to existing file if it exists
+    df_FWF_basal_melt.to_csv(output_basal_melt_FWF, mode='a', header=not os.path.exists(output_basal_melt_FWF))
+
+if year==year_min:
+    # Create output file for the first year
+    if os.path.isfile(output_calving_FWF):    
+        os.remove(output_calving_FWF)    
+
+    df_FWF_calving.to_csv(output_calving_FWF)
+elif year>year_min:
+    # Append to existing file if it exists
+    df_FWF_calving.to_csv(output_calving_FWF, mode='a', header=not os.path.exists(output_calving_FWF))
+
+##################### Distribution over ocean grid ######################
+
 # Compute fwf fluxes
 # Calving flux per area: convert Gt yr-1 to kg m-2 s-1 
 df_calving_flux = df_FWF_calving*kg_per_Gt/spy/df_fwf_geom['calving area']
@@ -401,8 +431,8 @@ elif fwf_distribution=='larmip':
     ds_calving_distribution = xr.full_like(calving_mask,np.nan)
     # Create dataset with calving distribution for each region
     for sector in sectors:
-        ds_calving_distribution[sector] = float(df_calving_flux.loc[year,sector])*calving_mask.calving_mask.where(calving_mask.calving_mask==sector_dict[sector])
-        ds_basal_melt_distribution[sector] = float(df_basal_melt_flux_per_volume.loc[year,sector])*ds_depth.bmdepth.values*basal_melt_mask.basal_melt_mask.where(basal_melt_mask.basal_melt_mask==sector_dict[sector])
+        ds_calving_distribution[sector] = float(df_calving_flux.loc[year,sector])*calving_mask.calving_mask.where(calving_mask.calving_mask==sector_dict[sector])/sector_dict[sector]
+        ds_basal_melt_distribution[sector] = float(df_basal_melt_flux_per_volume.loc[year,sector])*ds_depth.bmdepth.values*basal_melt_mask.basal_melt_mask.where(basal_melt_mask.basal_melt_mask==sector_dict[sector])/sector_dict[sector]
     ds_calving_distribution = ds_calving_distribution.drop_vars('calving_mask')
     ds_basal_melt_distribution = ds_basal_melt_distribution.drop_vars('basal_melt_mask')
     # Replace Nans with zeros before taking the sum of all regions
@@ -431,6 +461,10 @@ FWF_calving = FWF_calving.fillna(0) #set nans to zeros
 # Merge dataarrays in one dataset
 ds_FWF = xr.merge([FWF_basal_melt, FWF_calving])
 ds_FWF = ds_FWF.assign_coords({'time_counter': t_new.values})
+
+print('Total calving: ',(ds_FWF.socalving_f.mean('time_counter')*ds_area.areacello).sum()*spy/kg_per_Gt)
+print('Total basal melt: ',(ds_FWF.sorunoff_f.mean('time_counter')*ds_area.areacello).sum()*spy/kg_per_Gt)
+
 
 # Write to file  (to be read in by EC-Earth in the next year)
 if os.path.isfile(file_forcing):    

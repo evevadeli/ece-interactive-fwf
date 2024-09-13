@@ -10,7 +10,7 @@ import sys
 
 import ThetaoSectors as TS
 import DataVariablesParameters as dvp
-from config import running_mean_period
+#from config import running_mean_period
 
 print('Number of arguments:', len(sys.argv), 'arguments.')
 print('Argument List:', str(sys.argv))
@@ -51,7 +51,7 @@ kg_per_Gt         = 1e12         # [kg] to [Gt]
 
 ## Intermediate output files
 output_thetao =f'{path_output}/OceanSectorThetao_{exp_name}.csv'
-output_thetao_RM = f'{path_output}/OceanSectorThetao_{running_mean_period}yRM_{exp_name}.csv'
+#output_thetao_RM = f'{path_output}/OceanSectorThetao_{running_mean_period}yRM_{exp_name}.csv'
 
 ##################### Sector mean thetao computation (part of analysis) ############################
 
@@ -121,21 +121,21 @@ elif year>year_min:
 
 ds_area.close()
 
-## Read data from csv file 
-df_thetao_all = pd.read_csv(output_thetao)
-## Read baseline thetao
-df_thetao_baseline = pd.read_csv(file_baseline_thetao,index_col=0)
+### Read data from csv file 
+#df_thetao_all = pd.read_csv(output_thetao)
+### Read baseline thetao
+#df_thetao_baseline = pd.read_csv(file_baseline_thetao,index_col=0)
 
-# Compute thetao running mean
-df_thetao_running_mean = TS.running_mean_backward(df_thetao_all, df_thetao_baseline, year, year_min, running_mean_period)
+## Compute thetao running mean
+#df_thetao_running_mean = TS.running_mean_backward(df_thetao_all, df_thetao_baseline, year, year_min, running_mean_period)
 
 # Write output to file
-if year==year_min:
-    # Create output file for the first year
-    if os.path.isfile(output_thetao_RM):    
-        os.remove(output_thetao_RM)    
+#if year==year_min:
+#    # Create output file for the first year
+#    if os.path.isfile(output_thetao_RM):    
+#        os.remove(output_thetao_RM)    
 
-    df_thetao_running_mean.to_csv(output_thetao_RM)
-elif year>year_min:
-    df_thetao_running_mean.to_csv(output_thetao_RM, mode='a', header=not os.path.exists(output_thetao_RM))
+#    df_thetao_running_mean.to_csv(output_thetao_RM)
+#elif year>year_min:
+#    df_thetao_running_mean.to_csv(output_thetao_RM, mode='a', header=not os.path.exists(output_thetao_RM))
 
