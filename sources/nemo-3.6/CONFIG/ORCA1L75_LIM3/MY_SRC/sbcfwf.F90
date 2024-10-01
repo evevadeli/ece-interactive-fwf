@@ -20,7 +20,7 @@ MODULE sbcfwf
    IMPLICIT NONE
    PRIVATE
 
-   PUBLIC   sbc_fwf_init, sbc_fwf, sbc_fwf_bm, sbc_fwf_output        ! routines called by sbcmod.F90
+   PUBLIC   sbc_fwf_init, sbc_fwf, sbc_fwf_bm, sbc_fwf_output ! routines called by sbcmod.F90
 
    INTEGER                                   ::   ierror
    INTEGER                                   ::   ios
@@ -140,9 +140,10 @@ CONTAINS
       INTEGER  ::  ji, jj, jk                ! dummy loop indices
 
       REAL(wp), PARAMETER  ::  temp_bm=0.    ! temp of basal melt (in deg C)
+
       REAL(wp), POINTER, DIMENSION(:,:) ::  zthick, zdelta
       !
-      CALL wrk_alloc( jpi, jpj, zthick, zelta )
+      CALL wrk_alloc( jpi, jpj, zthick, zdelta )
 
       ! Thickness of layer where freshwater is added
       zthick(:,:) = sf_zshelf(:,:) - sf_zdraft(:,:)
@@ -169,8 +170,8 @@ CONTAINS
              & zdelta(:,:) / zthick(:,:)
              ! salinity change from mixing BM from zdraft to zshelf
              ! comment following block if salinity isn't corrected in top layer
-             tsn(:,:,jk,jp_sal) = tsn(:,:,jk,jp_sal) * zthick(:,:) &
-             &/( zthick(:,:) + zdelta(:,:) )
+             !!!tsn(:,:,jk,jp_sal) = tsn(:,:,jk,jp_sal) * zthick(:,:) &
+             !!!&/( zthick(:,:) + zdelta(:,:) )
          endwhere
                         
          ! temperature and salinity change from mixing BM from surface to
@@ -179,10 +180,11 @@ CONTAINS
              tsn(:,:,jk,jp_tem) = tsn(:,:,jk,jp_tem) &
              & + (temp_bm-tsn(:,:,jk,jp_tem)) / (sf_zshelf(:,:)/zdelta(:,:)+1.)
              ! comment following block if salinity isn't corrected in top layer
-             !!!tsn(:,:,jk,jp_sal) = tsn(:,:,jk,jp_sal) * sf_zshelf(:,:) &
-             !& / ( sf_zshelf(:,:) + zdelta(:,:) )
+             tsn(:,:,jk,jp_sal) = tsn(:,:,jk,jp_sal) * sf_zshelf(:,:) &
+             & / ( sf_zshelf(:,:) + zdelta(:,:) )
          endwhere
       enddo
+
       ! add basal melt to calving in the output (assuming it's all ice
       ! that cools the ocean when melting)
       calv(:,:) = calv(:,:) + sf_rnf_f(1)%fnow(:,:,1)
@@ -217,7 +219,7 @@ CONTAINS
       CALL fld_read ( kt, nn_fsbc, sf_rnf_f )  ! Read forced Runoffs data and provide it at kt
       CALL fld_read ( kt, nn_fsbc, sf_cal_f )  ! Read forced Runoffs calving data and provide it at kt
 
-      ! add freshwater fluxes from runoff (not anymore since we correct with sbc_fwf_bm)
+      ! Do NOT add freshwater fluxes from runoff, since we correct with sbc_fwf_bm
       !rnf(:,:)      = rnf(:,:)      + sf_rnf_f(1)%fnow(:,:,1)
       !WRITE(numout,*) 'forced runoffs.nc sorunoff_f  field added to `rnf` runoff flux'
       
@@ -226,7 +228,7 @@ CONTAINS
       ! so the upward calving flux is negative (and compatible with emp)
       zemp_cal(:,:) = - sf_cal_f(1)%fnow(:,:,1)
       emp(:,:) = emp(:,:) + zemp_cal(:,:)
-      
+
       ! WRITE(numout,*) 'forced runoffs.nc socalving_f fields added to `emp_tot` and `emp_oce` freshwater fluxes'
       
       ! add heat flux from calving
@@ -241,6 +243,7 @@ CONTAINS
       CALL wrk_dealloc( jpi,jpj, zemp_cal )
 
    END SUBROUTINE sbc_fwf
+   
 
    SUBROUTINE sbc_fwf_output
 
@@ -253,8 +256,10 @@ CONTAINS
       ! these were originally in sbccpl.F90, commented them out there now
       zcptn(:,:) = rcp * sst_m(:,:)
       IF( iom_use('hflx_rnf_cea') )  CALL iom_put( 'hflx_rnf_cea', rnf(:,:) * zcptn(:,:)  )  ! l.1680
-      IF( iom_use('hflx_cal_cea') )  CALL iom_put( 'hflx_cal_cea', - zemp_cal(:,:) * lfus )  ! l.1623
-      IF( iom_use('calving_cea' ) )  CALL iom_put( 'calving_cea' , - zemp_cal(:,:)        )  ! l.1538
+      !IF( iom_use('hflx_cal_cea') )  CALL iom_put( 'hflx_cal_cea', - zemp_cal(:,:) * lfus )  ! l.1623
+      !IF( iom_use('calving_cea' ) )  CALL iom_put( 'calving_cea' , - zemp_cal(:,:)        )  ! l.1538
+      IF( iom_use('hflx_cal_cea') )  CALL iom_put( 'hflx_cal_cea', calv(:,:) * lfus )  ! l.1623
+      IF( iom_use('calving_cea' ) )  CALL iom_put( 'calving_cea' , calv(:,:)        )  ! l.1538
 
       ! deallocate
       CALL wrk_dealloc( jpi,jpj, zcptn )
