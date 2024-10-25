@@ -105,6 +105,8 @@ def sel_depth_bnds(sector):
             ocean_slice = np.array([shelf_depth-100,shelf_depth+100]) 
         if shelf_depth == 550: #400-700m
             ocean_slice = np.array([shelf_depth-150,shelf_depth+150])
+        if shelf_depth == 450: #200-700m
+            ocean_slice = np.array([shelf_depth-250,shelf_depth+250])
       
     return ocean_slice
 

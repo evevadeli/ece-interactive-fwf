@@ -71,7 +71,7 @@ file_calving_mask = f'{path_input}/calving_mask_LARMIP_ORCA1.nc'
 ## FWF for EC-Earth (freshwater forcing computed from year yyyy is applied in year yyyy+1)
 file_forcing = f'{path_forcing_file}/FWF_LRF_y{year+1}.nc'
 file_bm_depth1 = f'{run_dir}/basal_melt_depth1.nc' #shallowest depth
-file_bm_depth2 =f'{run_dir}/basal_melt_depth2.nc' # deepest depth
+file_bm_depth2 =f'{run_dir}/basal_melt_depth2.nc' # deepest depth (take bathymetry into account)
 
 ## Basal melt in year yyyy affects freshwater forcing for the next 200 yrs (length of linear response functions)
 file_future_forcing = f'{path_output}/CumulativeFreshwaterForcingAnomaly_{exp_name}_Future.csv'

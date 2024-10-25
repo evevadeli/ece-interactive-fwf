@@ -1,5 +1,6 @@
 # Initialise freshwater forcing experiment by creating initial freshwater forcing file and depth distribution files
 # 2023-06: Eveline van der Linden (KNMI) linden@knmi.nl
+# only diagnostics
 
 ## Import modules
 import os
@@ -32,14 +33,12 @@ path_output = f'{run_dir}/fwf/interactive/forcing_files/' #Create other path (sc
 ## Input data
 file_area = f'{path_input}/areacello_Ofx_EC-Earth3_historical_r1i1p1f1_gn.nc'
 file_larmip_ocean_mask = f'{ini_data_dir}/masks/LARMIP_ocean_regions_ORCA1.nc'
-file_basal_melt_mask = f'{path_input}/basal_melt_mask_ORCA1_ocean.nc'
-file_calving_mask = f'{path_input}/calving_mask_ORCA1_ocean.nc'
 
 file_thetao = f'{run_dir}/output/nemo/{leg_number}/{exp_name}_1m_{year}0101_{year}1231_grid_T.nc'
 if not os.path.exists(file_thetao):
     file_thetao = f'{run_dir}/output/nemo/{leg_number}/{exp_name}_1m_{year}0101_{year}1231_opa_grid_T_3D.nc' #other output format
 
-file_baseline_thetao = f'{path_output}/OceanSectorThetao_piControl.csv'
+#file_baseline_thetao = f'{path_output}/OceanSectorThetao_piControl.csv'
 
 ## Output data
 ## FWF for EC-Earth (freshwater forcing computed from year yyyy is applied in year yyyy+1)
